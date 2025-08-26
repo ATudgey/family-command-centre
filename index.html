@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Family Command Center — Chores on Calendar</title>
+<meta name="theme-color" content="#ffffff" />
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('sw.js').catch(console.warn);
+    });
+  }
+</script>
+<style>
+:root { --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --primary:#2563eb; --danger:#dc2626; --grid:#e5e7eb; --ok:#16a34a; --shadow:0 2px 10px rgba(0,0,0,.06); }
+@media (prefers-color-scheme: dark){ :root{ --bg:#0b0e14; --fg:#e5e7eb; --muted:#9aa0a6; --card:#171b22; --grid:#222936; } }
+:root[data-theme="dark"]{ --bg:#0b0e14; --fg:#e5e7eb; --muted:#9aa0a6; --card:#171b22; --grid:#222936; }
+:root[data-theme="light"]{ --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --grid:#e5e7eb; }
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--fg);background:var(--bg);line-height:1.4}
+.app-header{position:sticky; top:0; z-index:10; background:var(--bg); border-bottom:1px solid var(--grid); padding:.75rem 1rem; display:grid; grid-template-columns:1fr auto; align-items:center; gap:1rem;}
+h1{margin:0;font-size:1.15rem}
+.settings-btn{background:var(--card); border:1px solid var(--grid); padding:.5rem .75rem; border-radius:.5rem; cursor:pointer}
+.settings-btn:hover{outline:2px solid var(--primary); outline-offset:1px}
+.app{display:grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px);}
+@media (max-width: 900px){ .app{ grid-template-columns: 72px 1fr; } .nav .label{ display:none; } }
+.nav{border-right:1px solid var(--grid); background:var(--bg); padding:.75rem; display:flex; flex-direction:column; gap:.75rem;}
+.nav h2{ font-size:.9rem; color:var(--muted); margin:.25rem .25rem; }
+.nav-btn{display:flex; align-items:center; gap:.75rem; width:100%; background:var(--card); border:1px solid var(--grid); padding:1rem .9rem; border-radius:.8rem; cursor:pointer; font-weight:600; text-align:left;}
+.nav-btn .dot{ width:.9rem; height:.9rem; border-radius:50%; background:var(--primary); opacity:.85; }
+.nav-btn:hover{ outline:2px solid var(--primary); outline-offset:1px; }
+.nav-btn.active{ border-color:transparent; color:#fff; background:linear-gradient(0deg, var(--primary), var(--primary)); }
+main{ padding:1rem; max-width:1400px; position:relative; z-index:1; }
+.section{ display:none; }
+.section.active{ display:block; }
+.row{ display:flex; gap:.5rem; }
+.wrap{ flex-wrap:wrap; }
+.align-center{ align-items:center; }
+.space-between{ justify-content:space-between; }
+.gap{ gap:.5rem; }
+.mono{ font-variant-numeric: tabular-nums; }
+.muted{ color:var(--muted); }
+.mini{ padding:.25rem .5rem; font-size:.85rem; }
+button,input,select,textarea,.file-label{
+  font:inherit; color:inherit; background:var(--card); border:1px solid var(--grid);
+  padding:.5rem .6rem; border-radius:.5rem; max-width:100%;
+}
+button{ cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+button.primary{ background:var(--primary); color:#fff; border-color:transparent; }
+button.secondary{ background:transparent; }
+button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
+.file-label{ display:inline-flex; align-items:center; gap:.5rem; cursor:pointer; }
+.calendar-layout{ display:grid; grid-template-columns: minmax(520px, 1fr) 380px; gap:1rem; }
+@media (max-width: 900px){ .calendar-layout{ grid-template-columns: 1fr; } }
+.calendar-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:.25rem; border-top:1px solid var(--grid); border-left:1px solid var(--grid); margin-top:.5rem; }
+.calendar-grid .cell{ border-right:1px solid var(--grid); border-bottom:1px solid var(--grid); min-height:92px; padding:.25rem; display:flex; flex-direction:column; gap:.25rem; }
+.calendar-grid .dow{ background:var(--card); font-weight:600; text-align:center; padding:.5rem 0; }
+.calendar-grid .date{ font-size:.9rem; color:var(--muted); }
+.event-pill{
+  border-radius:.45rem; padding:.15rem .4rem;
+  background:#1111; border:1px solid #0002; font-size:.85rem;
+  display:inline-flex; align-items:center; gap:.35rem; cursor:pointer; box-shadow:var(--shadow);
+}
+.event-pill:hover{ transform: translateY(-1px); }
+.pill-icon{ font-size:.95rem; line-height:1; }
+.event-pill.chore{ border-style:dashed; }
+.day-agenda{
+  background:var(--card); border:1px solid var(--grid); border-radius:.75rem; padding:.75rem; box-shadow:var(--shadow);
+  position:sticky; top:88px; height: fit-content;
+}
+.agenda-list{ list-style:none; padding:0; margin:.5rem 0 0; display:grid; gap:.5rem; }
+.agenda-item{ display:flex; justify-content:space-between; align-items:center; background:var(--bg); border:1px solid var(--grid); padding:.5rem .6rem; border-radius:.6rem; }
+.badge{ font-size:.75rem; padding:.15rem .4rem; border:1px solid var(--grid); border-radius:999px; background:var(--card); }
+.card-list{ list-style:none; padding:0; margin:.5rem 0; display:grid; gap:.5rem; }
+.card{ background:var(--card); border:1px solid var(--grid); border-radius:.75rem; padding:.75rem; box-shadow:var(--shadow); display:grid; gap:.35rem; }
+.card.completed{ background: color-mix(in srgb, var(--ok) 16%, var(--card)); border-color: color-mix(in srgb, var(--ok) 60%, var(--grid)); }
+.meal-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:.5rem; }
+.meal-day{ background:var(--card); border:1px solid var(--grid); border-radius:.5rem; overflow:hidden; }
+.meal-day header{ padding:.5rem; font-weight:600; border-bottom:1px solid var(--grid); display:grid; grid-template-columns:1fr auto; align-items:center; }
+.meal-day header .quick{ display:flex; gap:.25rem; }
+.meal-slot{ padding:.5rem; border-bottom:1px dashed var(--grid); }
+.meal-slot:last-child{ border-bottom:0; }
+.meal-slot h4{ margin:0 0 .25rem; font-size:.95rem; }
+.meal-slot .ingredients{ color:var(--muted); font-size:.9rem; }
+.settings-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1rem; }
+.box{ background:var(--card); border:1px solid var(--grid); border-radius:.75rem; padding:.75rem; box-shadow:var(--shadow); min-width:0; }
+.member-list{ list-style:none; padding:0; margin:.5rem 0 0; display:grid; gap:.5rem; }
+.member-row{ display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+.member-chip{ display:inline-flex; align-items:center; gap:.4rem; border:1px solid var(--grid); padding:.25rem .5rem; border-radius:999px; }
+.member-row input[type="color"]{ width:42px; height:32px; padding:0; border-radius:.5rem; }
+.file-label input{ display:none; }
+.modal::backdrop{ background:rgba(0,0,0,.4); }
+.modal{ border:none; border-radius:.75rem; padding:0; background:var(--card); color:var(--fg); }
+.modal-form{ padding:1rem; min-width:min(90vw,540px); display:grid; gap:.5rem; background:transparent; }
+.recipe-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:.5rem; max-height: 220px; overflow:auto; }
+.recipe-chip{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.5rem .6rem; border:1px solid var(--grid); background:var(--bg); border-radius:.6rem; cursor:pointer; }
+.recipe-chip:hover{ outline:2px solid var(--primary); outline-offset:2px; }
+.recipe-chip small{ color:var(--muted); }
+.search{ width:100%; }
+#confettiCanvas{ position:fixed; inset:0; pointer-events:none !important; z-index:9999; }
+@media (max-width: 900px){
+  .meal-grid{ grid-template-columns: 1fr; }
+  .calendar-grid .cell{ min-height:70px; }
+}
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Family Command Center</h1>
+    <button id="openSettings" class="settings-btn" aria-controls="settings" aria-expanded="false" onclick="setActive('settings')">Settings</button>
+  </header>
+
+  <canvas id="confettiCanvas"></canvas>
+
+  <div class="app">
+    <aside class="nav" role="navigation" aria-label="Primary">
+      <h2>Navigate</h2>
+      <button class="nav-btn active" data-section="calendar" onclick="setActive('calendar')">
+        <span class="dot"></span><span class="label">Calendar</span>
+      </button>
+      <button class="nav-btn" data-section="chores" onclick="setActive('chores')">
+        <span class="dot"></span><span class="label">Chores</span>
+      </button>
+      <button class="nav-btn" data-section="lists" onclick="setActive('lists')">
+        <span class="dot"></span><span class="label">Lists</span>
+      </button>
+      <button class="nav-btn" data-section="meals" onclick="setActive('meals')">
+        <span class="dot"></span><span class="label">Meal Planner</span>
+      </button>
+    </aside>
+
+    <main>
+      <section id="calendar" class="section active" role="region" aria-labelledby="Calendar">
+        <div class="calendar-layout">
+          <div>
+            <div class="row space-between align-center">
+              <div class="row align-center gap">
+                <button id="prevMonth" aria-label="Previous month">◀</button>
+                <h2 id="monthLabel"></h2>
+                <button id="nextMonth" aria-label="Next month">▶</button>
+              </div>
+              <div class="row align-center gap">
+                <label> Member:
+                  <select id="memberFilter"></select>
+                </label>
+                <button id="todayBtn">Today</button>
+                <button id="addEventBtn">+ Event</button>
+              </div>
+            </div>
+            <div id="calendarGrid" class="calendar-grid" aria-label="Month grid" role="grid"></div>
+          </div>
+
+          <aside class="day-agenda">
+            <div class="row space-between align-center">
+              <h3 style="margin:0">Today</h3>
+              <button id="agendaAddBtn" class="mini">+ Event</button>
+            </div>
+            <div class="muted" id="agendaDateLabel"></div>
+            <ul id="agendaList" class="agenda-list"></ul>
+          </aside>
+        </div>
+      </section>
+
+      <section id="chores" class="section" role="region" aria-labelledby="Chores">
+        <div class="panel-header">
+          <h2>Chore Board</h2>
+          <button id="addChoreBtn">+ Chore</button>
+        </div>
+        <div class="filters row gap">
+          <label>Assignee:
+            <select id="choreAssigneeFilter"></select>
+          </label>
+          <label>Status:
+            <select id="choreStatusFilter">
+              <option value="all">All</option>
+              <option value="open">Open</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+        </div>
+        <ul id="choreList" class="card-list"></ul>
+      </section>
+
+      <section id="lists" class="section" role="region" aria-labelledby="Lists">
+        <div class="row wrap gap">
+          <div class="list-col" style="flex:1 1 380px; min-width:280px;">
+            <div class="panel-header">
+              <h2>Groceries</h2>
+              <button data-list="groceries" class="addListItemBtn">+ Item</button>
+            </div>
+            <ul id="groceriesList" class="card-list"></ul>
+          </div>
+          <div class="list-col" style="flex:1 1 380px; min-width:280px;">
+            <div class="panel-header">
+              <h2>To-Dos</h2>
+              <button data-list="todos" class="addListItemBtn">+ Item</button>
+            </div>
+            <ul id="todosList" class="card-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="meals" class="section" role="region" aria-labelledby="Meal Planner">
+        <div class="panel-header">
+          <h2>Weekly Meal Planner</h2>
+          <div class="row align-center gap">
+            <button id="prevWeek" aria-label="Previous week">◀</button>
+            <span id="weekLabel" class="mono"></span>
+            <button id="nextWeek" aria-label="Next week">▶</button>
+            <button id="addMealBtn">+ Meal</button>
+            <button id="sendIngredientsBtn">Send ingredients to Groceries</button>
+          </div>
+        </div>
+        <div id="mealGrid" class="meal-grid"></div>
+      </section>
+
+      <section id="settings" class="section" role="region" aria-labelledby="Settings">
+        <h2>Settings</h2>
+        <div class="settings-grid">
+          <div class="box">
+            <h3>Family Members</h3>
+            <ul id="memberList" class="member-list"></ul>
+            <button id="addMemberBtn">+ Member</button>
+          </div>
+          <div class="box">
+            <h3>Theme</h3>
+            <div class="row gap">
+              <button data-theme="light" class="themeBtn">Light</button>
+              <button data-theme="dark" class="themeBtn">Dark</button>
+              <button data-theme="auto" class="themeBtn">Auto</button>
+            </div>
+          </div>
+          <div class="box">
+            <h3>Backup</h3>
+            <div class="row gap wrap">
+              <button id="exportJsonBtn">Export JSON</button>
+              <label class="file-label">Import JSON <input id="importJsonInput" type="file" accept="application/json" /></label>
+              <button id="exportIcsBtn">Export .ics (events)</button>
+            </div>
+          </div>
+          <div class="box">
+            <h3>Recipes (Common Meals)</h3>
+            <div class="row gap wrap"><button id="addRecipeBtn">+ Recipe</button></div>
+            <ul id="recipeList" class="card-list"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODALS -->
+  <dialog id="eventModal" class="modal">
+    <form method="dialog" id="eventForm" class="modal-form">
+      <h3 id="eventModalTitle">New Event</h3>
+      <input type="hidden" id="eventId" />
+      <label>Title <input id="eventTitle" required /></label>
+      <div class="row gap">
+        <label>Start <input id="eventStart" type="datetime-local" required /></label>
+        <label>End <input id="eventEnd" type="datetime-local" required /></label>
+      </div>
+      <label>Member
+        <select id="eventMember"></select>
+      </label>
+      <label>Location <input id="eventLocation" placeholder="Optional" /></label>
+      <label>Notes <textarea id="eventNotes" rows="3" placeholder="Optional"></textarea></label>
+      <div class="row space-between">
+        <button type="button" value="cancel" class="secondary" onclick="closeDialog('eventModal')">Cancel</button>
+        <div class="row gap">
+          <button id="deleteEventBtn" class="danger" type="button">Delete</button>
+          <button id="saveEventBtn" value="default" class="primary" type="button">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="choreModal" class="modal">
+    <form method="dialog" id="choreForm" class="modal-form">
+      <h3 id="choreModalTitle">New Chore</h3>
+      <input type="hidden" id="choreId" />
+      <label>Title <input id="choreTitle" required /></label>
+      <label>Assignee
+        <select id="choreAssignee"></select>
+      </label>
+      <label>Due (optional) <input id="choreDue" type="date" /></label>
+      <label>Repeats
+        <select id="choreRepeat">
+          <option value="none">Does not repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </label>
+      <div class="row space-between">
+        <button type="button" value="cancel" class="secondary" onclick="closeDialog('choreModal')">Cancel</button>
+        <div class="row gap">
+          <button id="deleteChoreBtn" class="danger" type="button">Delete</button>
+          <button id="saveChoreBtn" value="default" class="primary" type="button">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="listItemModal" class="modal">
+    <form method="dialog" id="listItemForm" class="modal-form">
+      <h3 id="listItemModalTitle">New Item</h3>
+      <input type="hidden" id="listType" />
+      <input type="hidden" id="listItemId" />
+      <label>Item <input id="listItemText" required /></label>
+      <label>Quantity (optional) <input id="listItemQty" /></label>
+      <div class="row space-between">
+        <button type="button" value="cancel" class="secondary" onclick="closeDialog('listItemModal')">Cancel</button>
+        <div class="row gap">
+          <button id="deleteListItemBtn" class="danger" type="button">Delete</button>
+          <button id="saveListItemBtn" value="default" class="primary" type="button">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="mealModal" class="modal">
+    <form method="dialog" id="mealForm" class="modal-form">
+      <h3 id="mealModalTitle">Add Meal</h3>
+      <input type="hidden" id="mealDate" />
+      <label>Meal slot
+        <select id="mealSlot">
+          <option>Breakfast</option>
+          <option>Lunch</option>
+          <option selected>Dinner</option>
+        </select>
+      </label>
+
+      <div class="row gap wrap">
+        <input id="recipeSearch" class="search" placeholder="Search recipes…" />
+      </div>
+      <div id="topRecipes" class="recipe-grid"></div>
+
+      <label>Recipe
+        <select id="recipeSelect">
+          <option value="">— Choose a recipe —</option>
+        </select>
+      </label>
+
+      <label>Name <input id="mealName" required /></label>
+      <label>Ingredients (comma separated)
+        <textarea id="mealIngredients" rows="3" placeholder="e.g., pasta, tomatoes, basil"></textarea>
+      </label>
+      <div class="row space-between">
+        <button type="button" value="cancel" class="secondary" onclick="closeDialog('mealModal')">Cancel</button>
+        <div class="row gap">
+          <button id="deleteMealBtn" class="danger" type="button">Clear</button>
+          <button id="saveMealBtn" value="default" class="primary" type="button">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+<script>
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+function pad2(n){ return n<10 ? '0'+n : ''+n; }
+function dateKeyLocal(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function parseDateOnlyLocal(s){ const [y,m,dd]=s.split('-').map(Number); const d=new Date(); d.setFullYear(y,m-1,dd); d.setHours(0,0,0,0); return d; }
+function atMidnight(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function startOfWeek(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function endOfWeek(d){ const s=startOfWeek(d); const e=new Date(s); e.setDate(e.getDate()+6); return e; }
+function toLocalInput(dtIso){ return dtIso ? dtIso.slice(0,16) : ''; }
+function fromLocalInput(val){ return new Date(val).toISOString(); }
+function byId(arr,id){ return arr.find(x=>x.id===id); }
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function hex2rgba(hex,a){ const c=hex.replace('#',''); const n=parseInt(c,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r}, ${g}, ${b}, ${a})`; }
+
+const STORAGE_KEY = 'fcc:v2'; // bump version to avoid conflicting with older saves
+const defaultData = () => ({
+  members: [
+    { id: uid(), name: 'Adam', color: '#ef4444' },
+    { id: uid(), name: 'Marie', color: '#10b981' },
+    { id: uid(), name: 'Daphne', color: '#6366f1' },
+  ],
+  events: [],
+  chores: [],
+  lists: { groceries: [], todos: [] },
+  meals: {},
+  settings: { theme: 'auto' },
+  recipes: [
+    { id: uid(), name: "Three Cheese Pasta Bake",
+      ingredients: ["cheddar cheese","mozzarella","parmesan","penne pasta","courgette","fresh tomatoes","tinned chopped tomatoes","basil","veg stock cube"] },
+    { id: uid(), name: "Stir Fry with Beef",
+      ingredients: ["beef strips","soy sauce","garlic","ginger","mixed vegetables","egg noodles","sesame oil"] },
+    { id: uid(), name: "Stir Fry with Chicken",
+      ingredients: ["chicken breast","soy sauce","garlic","ginger","mixed vegetables","egg noodles","sesame oil"] },
+    { id: uid(), name: "Slow Cooker Beef Stew",
+      ingredients: ["braising beef","onions","carrots","celery","potatoes","beef stock cube","tinned chopped tomatoes","bay leaf","thyme","flour"] },
+    { id: uid(), name: "Slow Cooker Chicken Curry",
+      ingredients: ["chicken thighs","onions","garlic","ginger","curry paste","coconut milk","tinned tomatoes","chicken stock cube","spinach"] },
+    { id: uid(), name: "Slow Cooker Chili",
+      ingredients: ["minced beef","kidney beans","onions","garlic","chili powder","cumin","tinned chopped tomatoes","beef stock cube","bell peppers"] },
+    { id: uid(), name: "Shepherd’s Pie",
+      ingredients: ["minced lamb","potatoes","butter","milk","onion","carrot","peas","gravy granules","worcestershire sauce"] },
+    { id: uid(), name: "Roast Chicken Dinner",
+      ingredients: ["whole chicken","roasting potatoes","carrots","broccoli","stuffing mix","gravy granules"] },
+    { id: uid(), name: "Homemade Pizza",
+      ingredients: ["pizza dough","tomato puree","mozzarella","cheddar","parmesan","toppings of choice (ham, mushrooms, peppers)"] },
+    { id: uid(), name: "Ready Made Pizza",
+      ingredients: ["frozen pizza or chilled ready-made pizza"] },
+    { id: uid(), name: "Chicken Nuggets, Chips & Beans",
+      ingredients: ["frozen chicken nuggets","oven chips","baked beans"] },
+    { id: uid(), name: "Fish and Chips",
+      ingredients: ["white fish fillets","batter mix","potatoes","peas","tartar sauce"] },
+    { id: uid(), name: "Cheese Omelette",
+      ingredients: ["eggs","cheddar","butter","salt","pepper"] }
+  ],
+  recipeUsage: {} // recipeId -> count
+});
+function uid(){ return Math.random().toString(36).slice(2,10); }
+let state = loadState();
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultData();
+    const parsed=JSON.parse(raw);
+    if(!parsed.lists) parsed.lists={groceries:[],todos:[]};
+    if(!parsed.meals) parsed.meals={};
+    if(!parsed.settings) parsed.settings={theme:'auto'};
+    if(!parsed.recipes) parsed.recipes=[];
+    if(!parsed.recipeUsage) parsed.recipeUsage={};
+    return parsed;
+  }catch{ return defaultData(); }
+}
+function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function ensureTheme(){
+  const root=document.documentElement;
+  state.settings.theme==='auto'?root.removeAttribute('data-theme'):root.setAttribute('data-theme',state.settings.theme);
+}
+
+const confettiCanvas = $('#confettiCanvas'); const ctx = confettiCanvas.getContext('2d');
+function resizeCanvas(){ confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; }
+window.addEventListener('resize', resizeCanvas); resizeCanvas();
+function confettiBurst(x, y){
+  const parts = Array.from({length: 80}, ()=> ({
+    x, y, vx: (Math.random()*4-2)*3, vy: (Math.random()*-3-2)*3,
+    size: Math.random()*4+2, life: Math.random()*50+40,
+    color: `hsl(${Math.random()*360}, 90%, 60%)`
+  }));
+  let frame=0;
+  function tick(){
+    ctx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+    parts.forEach(p=>{
+      p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life--;
+      ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+    frame++;
+    if (parts.some(p=>p.life>0) && frame < 180) requestAnimationFrame(tick);
+    else ctx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+  }
+  tick();
+}
+
+function setActive(id){
+  const ids=['calendar','chores','lists','meals','settings'];
+  ids.forEach(sec => {
+    const el = document.getElementById(sec);
+    if(el) el.classList.toggle('active', sec===id);
+    const btn = document.querySelector(`.nav-btn[data-section="${sec}"]`);
+    if(btn) btn.classList.toggle('active', sec===id);
+  });
+  if(id==='calendar') renderCalendar();
+  if(id==='chores') renderChores();
+  if(id==='lists') renderLists();
+  if(id==='meals') renderMeals();
+  if(id==='settings') renderSettings();
+}
+function closeDialog(id){ const d=document.getElementById(id); if(d?.open) d.close(); }
+
+let calCursor = atMidnight(new Date());
+let agendaSelectedKey = dateKeyLocal(new Date());
+$('#prevMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); renderCalendar(); });
+$('#nextMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); renderCalendar(); });
+$('#todayBtn').addEventListener('click', ()=>{ calCursor = atMidnight(new Date()); agendaSelectedKey = dateKeyLocal(new Date()); renderCalendar(); renderAgenda(); });
+$('#addEventBtn').addEventListener('click', ()=>openEventModal());
+$('#agendaAddBtn').addEventListener('click', ()=>openEventModal(undefined, agendaSelectedKey));
+
+function renderCalendar(){
+  $('#monthLabel').textContent = calCursor.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const memberFilter = $('#memberFilter');
+  memberFilter.innerHTML = '<option value="all">All members</option>' + state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  if(!memberFilter.value) memberFilter.value='all';
+  memberFilter.onchange = () => { renderCalendar(); renderAgenda(); };
+
+  const grid=$('#calendarGrid'); grid.innerHTML='';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{ const c=document.createElement('div'); c.className='cell dow'; c.textContent=d; grid.appendChild(c); });
+
+  const first=new Date(calCursor.getFullYear(), calCursor.getMonth(), 1);
+  const start=startOfWeek(first);
+  const nextMonth=new Date(calCursor.getFullYear(), calCursor.getMonth()+1, 1);
+  const lastDate=new Date(nextMonth - 1);
+  const end=endOfWeek(lastDate);
+
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+    const cell=document.createElement('div'); cell.className='cell';
+    const dateLabel=document.createElement('div'); dateLabel.className='date';
+    const key = dateKeyLocal(d);
+    dateLabel.textContent = d.getMonth()===calCursor.getMonth()? d.getDate() : '';
+    if (key === agendaSelectedKey) { dateLabel.style.fontWeight='700'; }
+    cell.appendChild(dateLabel);
+
+    const memberId=memberFilter.value;
+
+    const dayEvents=state.events
+      .filter(e => e.start.slice(0,10) <= key && e.end.slice(0,10) >= key)
+      .filter(e => memberId==='all' ? true : e.memberId===memberId)
+      .sort((a,b)=> a.start.localeCompare(b.start));
+
+    dayEvents.forEach(e=>{
+      const m=byId(state.members,e.memberId) || {color:'#999', name:''};
+      const pill=document.createElement('div'); pill.className='event-pill';
+      pill.style.borderColor=m.color; pill.style.boxShadow='inset 0 0 0 999px '+hex2rgba(m.color,.14);
+      const time=new Date(e.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      pill.innerHTML=`<span class="dot" style="background:${m.color};width:.6rem;height:.6rem;border-radius:50%"></span><span>${time} ${escapeHtml(e.title)}</span>`;
+      pill.title=(m.name?`[${m.name}] `:'')+e.title;
+      pill.addEventListener('click',()=>openEventModal(e.id));
+      cell.appendChild(pill);
+    });
+
+    const dayChores = state.chores
+      .filter(c => c.due === key && !c.done)
+      .filter(c => memberId==='all' ? true : c.assignee===memberId);
+
+    dayChores.forEach(c=>{
+      const m=byId(state.members,c.assignee) || {color:'#999', name:''};
+      const pill=document.createElement('div'); pill.className='event-pill chore';
+      pill.style.borderColor=m.color; pill.style.boxShadow='inset 0 0 0 999px '+hex2rgba(m.color,.10);
+      pill.innerHTML=`<span class="pill-icon">🧹</span><span>${escapeHtml(c.title)}</span>`;
+      pill.title=(m.name?`[${m.name}] `:'')+c.title+' (chore)';
+      pill.addEventListener('click',()=>openChoreModal(c.id));
+      cell.appendChild(pill);
+    });
+
+    cell.addEventListener('click', ()=>{ agendaSelectedKey = key; renderAgenda(); renderCalendar(); });
+    cell.addEventListener('dblclick',()=>openEventModal(undefined, key));
+    grid.appendChild(cell);
+  }
+
+  renderAgenda();
+}
+
+function renderAgenda(){
+  const label = $('#agendaDateLabel');
+  const list = $('#agendaList');
+  const date = parseDateOnlyLocal(agendaSelectedKey);
+  const memberId = $('#memberFilter').value || 'all';
+  label.textContent = date.toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  const events = state.events
+    .filter(e => e.start.slice(0,10) <= agendaSelectedKey && e.end.slice(0,10) >= agendaSelectedKey)
+    .filter(e => memberId==='all' ? true : e.memberId === memberId)
+    .sort((a,b)=> a.start.localeCompare(b.start));
+
+  const chores = state.chores
+    .filter(c => c.due === agendaSelectedKey && !c.done)
+    .filter(c => memberId==='all' ? true : c.assignee === memberId);
+
+  list.innerHTML = '';
+  if (!events.length && !chores.length){
+    const li = document.createElement('li'); li.className='agenda-item';
+    li.innerHTML='<span class="muted">Nothing scheduled</span><span></span>';
+    list.appendChild(li); return;
+  }
+
+  events.forEach(e=>{
+    const time = new Date(e.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const li=document.createElement('li'); li.className='agenda-item';
+    li.innerHTML = `<span><strong>${time}</strong> — ${escapeHtml(e.title)}</span><button class="mini secondary">Open</button>`;
+    li.querySelector('button').addEventListener('click', ()=>openEventModal(e.id));
+    list.appendChild(li);
+  });
+  chores.forEach(c=>{
+    const m=byId(state.members,c.assignee);
+    const li=document.createElement('li'); li.className='agenda-item';
+    li.innerHTML = `<span>🧹 ${escapeHtml(c.title)} ${m?`<span class="badge">${escapeHtml(m.name)}</span>`:''}</span>
+                    <button class="mini secondary">Open</button>`;
+    li.querySelector('button').addEventListener('click', ()=>openChoreModal(c.id));
+    list.appendChild(li);
+  });
+}
+
+const eventModal=$('#eventModal');
+$('#deleteEventBtn').addEventListener('click', ()=>{
+  const id=$('#eventId').value; if(!id) return eventModal.close();
+  state.events=state.events.filter(e=>e.id!==id); saveState(); eventModal.close(); renderCalendar();
+});
+$('#saveEventBtn').addEventListener('click', ()=>{
+  const id=$('#eventId').value || uid();
+  const payload={
+    id,
+    title: $('#eventTitle').value.trim(),
+    start: fromLocalInput($('#eventStart').value),
+    end: fromLocalInput($('#eventEnd').value),
+    memberId: $('#eventMember').value,
+    location: $('#eventLocation').value.trim(),
+    notes: $('#eventNotes').value.trim()
+  };
+  if(!payload.title) return;
+  const exists=state.events.some(e=>e.id===id);
+  state.events = exists ? state.events.map(e=>e.id===id?payload:e) : [...state.events,payload];
+  saveState(); eventModal.close(); renderCalendar();
+});
+function openEventModal(eventId, dateKey){
+  $('#eventModalTitle').textContent = eventId?'Edit Event':'New Event';
+  const sel=$('#eventMember'); sel.innerHTML=state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  if(eventId){
+    const e=byId(state.events,eventId);
+    $('#eventId').value=e.id; $('#eventTitle').value=e.title;
+    $('#eventStart').value=toLocalInput(e.start); $('#eventEnd').value=toLocalInput(e.end);
+    $('#eventMember').value=e.memberId; $('#eventLocation').value=e.location||''; $('#eventNotes').value=e.notes||''; 
+    $('#deleteEventBtn').style.display='inline-block';
+  } else {
+    $('#eventId').value=''; $('#eventTitle').value='';
+    const start = dateKey ? parseDateOnlyLocal(dateKey) : new Date(); if (dateKey) start.setHours(9,0,0,0);
+    const end=new Date(start); end.setHours(end.getHours()+1);
+    $('#eventStart').value=toLocalInput(start.toISOString()); $('#eventEnd').value=toLocalInput(end.toISOString());
+    $('#eventMember').value=state.members[0]?.id ?? ''; $('#eventLocation').value=''; $('#eventNotes').value='';
+    $('#deleteEventBtn').style.display='none';
+  }
+  eventModal.showModal();
+}
+
+$('#addChoreBtn').addEventListener('click', ()=>openChoreModal());
+const choreModal=$('#choreModal');
+$('#saveChoreBtn').addEventListener('click', ()=>{
+  const id=$('#choreId').value || uid();
+  const payload={ id,
+    title: $('#choreTitle').value.trim(),
+    assignee: $('#choreAssignee').value,
+    due: $('#choreDue').value || null,
+    repeat: $('#choreRepeat').value,
+    done: false
+  };
+  if(!payload.title){ alert('Please enter a title'); return; }
+  const exists=state.chores.some(c=>c.id===id);
+  if(exists){ const prev=byId(state.chores,id); payload.done=prev.done; state.chores=state.chores.map(c=>c.id===id?payload:c); }
+  else state.chores.push(payload);
+  saveState(); choreModal.close(); renderChores(); renderCalendar();
+});
+$('#deleteChoreBtn').addEventListener('click', ()=>{
+  const id=$('#choreId').value; if(!id) return choreModal.close();
+  state.chores=state.chores.filter(c=>c.id!==id); saveState(); choreModal.close(); renderChores(); renderCalendar();
+});
+function openChoreModal(choreId){
+  const sel=$('#choreAssignee'); sel.innerHTML=state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  if(choreId){
+    const c=byId(state.chores,choreId);
+    $('#choreModalTitle').textContent='Edit Chore';
+    $('#choreId').value=c.id; $('#choreTitle').value=c.title; $('#choreAssignee').value=c.assignee;
+    $('#choreDue').value=c.due||''; $('#choreRepeat').value=c.repeat||'none';
+    $('#deleteChoreBtn').style.display='inline-block';
+  } else {
+    $('#choreModalTitle').textContent='New Chore';
+    $('#choreId').value=''; $('#choreTitle').value='';
+    $('#choreAssignee').value=state.members[0]?.id ?? '';
+    $('#choreDue').value=''; $('#choreRepeat').value='none';
+    $('#deleteChoreBtn').style.display='none';
+  }
+  choreModal.showModal();
+}
+function renderChores(){
+  const assigneeFilter=$('#choreAssigneeFilter');
+  assigneeFilter.innerHTML='<option value="all">Anyone</option>'+state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  if(!assigneeFilter.value) assigneeFilter.value='all';
+  assigneeFilter.onchange=renderChores;
+  const statusFilter=$('#choreStatusFilter'); statusFilter.onchange=renderChores;
+
+  const ul=$('#choreList'); ul.innerHTML='';
+  const today=atMidnight(new Date());
+  state.chores
+    .filter(c=>assigneeFilter.value==='all'?true:c.assignee===assigneeFilter.value)
+    .filter(c=>statusFilter.value==='all'?true:(statusFilter.value==='done'?c.done:!c.done))
+    .sort((a,b)=>(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99'))
+    .forEach(c=>{
+      const li=document.createElement('li'); li.className='card';
+      const m=byId(state.members,c.assignee); const color=m?.color||'#999';
+      const dueText=c.due?parseDateOnlyLocal(c.due).toLocaleDateString():'No due date';
+      const overdue=c.due && parseDateOnlyLocal(c.due) < today && !c.done;
+      li.innerHTML=`
+        <div class="row space-between align-center wrap">
+          <div class="row align-center gap wrap">
+            <input class="chore-check" type="checkbox" ${c.done?'checked':''} aria-label="Done" />
+            <strong class="chore-title">${escapeHtml(c.title)}</strong>
+            <span class="member-chip" title="${m?.name||'Unassigned'}"><span class="dot" style="background:${color};width:.8rem;height:.8rem;border-radius:50%"></span>${m?.name||'—'}</span>
+          </div>
+          <span ${overdue?'style="color:var(--danger);font-weight:600"':'class="muted"'}>${dueText}</span>
+        </div>
+        <div class="row space-between wrap">
+          <div class="muted">Repeats: ${c.repeat}</div>
+          <div class="row gap">
+            <button class="secondary edit">Edit</button>
+            <button class="danger delete">Delete</button>
+          </div>
+        </div>`;
+      if (c.done) li.classList.add('completed');
+      const checkbox = li.querySelector('.chore-check');
+      const titleEl = li.querySelector('.chore-title');
+      if (c.done) titleEl.classList.add('strike');
+      checkbox.addEventListener('change', (ev)=>{
+        const rect = ev.target.getBoundingClientRect();
+        if (!c.done) confettiBurst(rect.left+8, rect.top+8);
+        c.done = checkbox.checked;
+        titleEl.classList.toggle('strike', c.done);
+        li.classList.toggle('completed', c.done);
+        titleEl.classList.add('done-pop'); setTimeout(()=>titleEl.classList.remove('done-pop'), 250);
+        if(c.done && c.repeat!=='none' && c.due){
+          const d=parseDateOnlyLocal(c.due);
+          if(c.repeat==='daily') d.setDate(d.getDate()+1);
+          if(c.repeat==='weekly') d.setDate(d.getDate()+7);
+          state.chores.push({ ...c, id: uid(), done:false, due: dateKeyLocal(d) });
+        }
+        saveState(); renderChores(); renderCalendar();
+      });
+      li.querySelector('.edit').addEventListener('click', ()=>openChoreModal(c.id));
+      li.querySelector('.delete').addEventListener('click', ()=>{ state.chores=state.chores.filter(x=>x.id!==c.id); saveState(); renderChores(); renderCalendar(); });
+      ul.appendChild(li);
+    });
+}
+
+$$('.addListItemBtn').forEach(btn=> btn.addEventListener('click', ()=>openListItemModal(btn.dataset.list)) );
+const listModal=$('#listItemModal');
+$('#saveListItemBtn').addEventListener('click', ()=>{
+  const type=$('#listType').value; const id=$('#listItemId').value || uid();
+  const payload={ id, text:$('#listItemText').value.trim(), qty:$('#listItemQty').value.trim(), done:false };
+  if(!payload.text) return;
+  const exists=state.lists[type].some(i=>i.id===id);
+  if(exists){ const prev=state.lists[type].find(i=>i.id===id); payload.done=prev.done; state.lists[type]=state.lists[type].map(i=>i.id===id?payload:i); }
+  else state.lists[type].push(payload);
+  saveState(); listModal.close(); renderLists();
+});
+$('#deleteListItemBtn').addEventListener('click', ()=>{
+  const type=$('#listType').value; const id=$('#listItemId').value; if(!id) return listModal.close();
+  state.lists[type]=state.lists[type].filter(i=>i.id!==id); saveState(); listModal.close(); renderLists();
+});
+function openListItemModal(type, itemId){
+  $('#listType').value=type;
+  if(itemId){
+    const it=state.lists[type].find(i=>i.id===itemId);
+    $('#listItemModalTitle').textContent='Edit Item'; $('#listItemId').value=it.id; $('#listItemText').value=it.text; $('#listItemQty').value=it.qty||''; $('#deleteListItemBtn').style.display='inline-block';
+  } else {
+    $('#listItemModalTitle').textContent='New Item'; $('#listItemId').value=''; $('#listItemText').value=''; $('#listItemQty').value=''; $('#deleteListItemBtn').style.display='none';
+  }
+  listModal.showModal();
+}
+function renderLists(){
+  ['groceries','todos'].forEach(type=>{
+    const ul= type==='groceries' ? $('#groceriesList') : $('#todosList'); ul.innerHTML='';
+    state.lists[type].forEach(it=>{
+      const li=document.createElement('li'); li.className='card';
+      li.innerHTML=`<div class="row space-between align-center wrap">
+        <div class="row align-center gap wrap">
+          <input type="checkbox" ${it.done?'checked':''} />
+          <strong class="item-title">${escapeHtml(it.text)}</strong> ${it.qty?`<span class="muted">(${escapeHtml(it.qty)})</span>`:''}
+        </div>
+        <div class="row gap"><button class="secondary edit">Edit</button><button class="danger delete">Delete</button></div>
+      </div>`;
+      const title=li.querySelector('.item-title');
+      if(it.done){ title.classList.add('strike'); li.classList.add('completed'); }
+      li.querySelector('input').addEventListener('change', (ev)=>{
+        it.done=!it.done;
+        title.classList.toggle('strike', it.done);
+        li.classList.toggle('completed', it.done);
+        if(it.done){
+          const rect = ev.target.getBoundingClientRect();
+          confettiBurst(rect.left+8, rect.top+8);
+          title.classList.add('done-pop'); setTimeout(()=>title.classList.remove('done-pop'), 250);
+        }
+        saveState();
+      });
+      li.querySelector('.edit').addEventListener('click', ()=>openListItemModal(type, it.id));
+      li.querySelector('.delete').addEventListener('click', ()=>{ state.lists[type]=state.lists[type].filter(x=>x.id!==it.id); saveState(); renderLists(); });
+      ul.appendChild(li);
+    });
+  });
+}
+
+let weekCursor = startOfWeek(new Date());
+$('#prevWeek').addEventListener('click', ()=>{ weekCursor.setDate(weekCursor.getDate()-7); renderMeals(); });
+$('#nextWeek').addEventListener('click', ()=>{ weekCursor.setDate(weekCursor.getDate()+7); renderMeals(); });
+$('#addMealBtn').addEventListener('click', ()=>openMealModal(dateKeyLocal(weekCursor)));
+$('#sendIngredientsBtn').addEventListener('click', sendIngredientsToGroceries);
+
+const mealModal=$('#mealModal');
+$('#saveMealBtn').addEventListener('click', ()=>{
+  const date=$('#mealDate').value; const slot=$('#mealSlot').value; const name=$('#mealName').value.trim();
+  const ingredients=$('#mealIngredients').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!date||!slot||!name) return;
+  const wkKey=dateKeyLocal(startOfWeek(parseDateOnlyLocal(date)));
+  if(!state.meals[wkKey]) state.meals[wkKey]={};
+  if(!state.meals[wkKey][date]) state.meals[wkKey][date]={};
+  state.meals[wkKey][date][slot]={ name, ingredients };
+  // bump usage if name matches a recipe
+  const recipe = state.recipes.find(r => r.name.toLowerCase() === name.toLowerCase());
+  if(recipe){
+    state.recipeUsage[recipe.id] = (state.recipeUsage[recipe.id]||0) + 1;
+  }
+  saveState(); mealModal.close(); renderMeals();
+});
+$('#deleteMealBtn').addEventListener('click', ()=>{
+  const date=$('#mealDate').value; const slot=$('#mealSlot').value;
+  const wkKey=dateKeyLocal(startOfWeek(parseDateOnlyLocal(date)));
+  if(state.meals[wkKey]?.[date]?.[slot]){ delete state.meals[wkKey][date][slot]; saveState(); }
+  mealModal.close(); renderMeals();
+});
+function openMealModal(dateKey, slot='Dinner'){
+  $('#mealModalTitle').textContent='Add Meal';
+  $('#mealDate').value=dateKey; $('#mealSlot').value=slot;
+  populateRecipesUI();
+  const wkKey=dateKeyLocal(startOfWeek(parseDateOnlyLocal(dateKey)));
+  const existing=state.meals[wkKey]?.[dateKey]?.[slot];
+  $('#mealName').value=existing?.name||''; $('#mealIngredients').value=existing?.ingredients?.join(', ')||'';
+  mealModal.showModal();
+}
+function renderMeals(){
+  const start=startOfWeek(weekCursor); const end=endOfWeek(weekCursor);
+  $('#weekLabel').textContent = `${start.toLocaleDateString()} – ${end.toLocaleDateString()}`;
+  const grid=$('#mealGrid'); grid.innerHTML=''; const wkKey=dateKeyLocal(startOfWeek(weekCursor)); const slots=['Breakfast','Lunch','Dinner'];
+  for(let i=0;i<7;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i); const key=dateKeyLocal(d);
+    const day=document.createElement('div'); day.className='meal-day';
+    day.innerHTML=`<header><div>${d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})}</div>
+      <div class="quick">
+        <button class="secondary mini" data-from-recipe="${key}">+ From recipe</button>
+        <button class="secondary mini" data-date="${key}">+ Add</button>
+      </div>
+    </header>`;
+    day.querySelector('button[data-date]').addEventListener('click', ()=>openMealModal(key));
+    day.querySelector('button[data-from-recipe]').addEventListener('click', ()=>{
+      openMealModal(key);
+      $('#recipeSearch').focus();
+    });
+    slots.forEach(slot=>{
+      const slotDiv=document.createElement('div'); slotDiv.className='meal-slot';
+      const existing=state.meals[wkKey]?.[key]?.[slot];
+      if(existing){
+        slotDiv.innerHTML=`<h4>${slot}: ${escapeHtml(existing.name)}</h4><div class="ingredients">${existing.ingredients.join(', ')}</div><div class="row gap"><button class="secondary edit">Edit</button><button class="danger clear">Clear</button></div>`;
+        slotDiv.querySelector('.edit').addEventListener('click', ()=>openMealModal(key,slot));
+        slotDiv.querySelector('.clear').addEventListener('click', ()=>{ delete state.meals[wkKey][key][slot]; saveState(); renderMeals(); });
+      } else {
+        slotDiv.innerHTML=`<h4>${slot}</h4><div class="muted">—</div>`;
+      }
+      slotDiv.addEventListener('dblclick', ()=>openMealModal(key, slot));
+      slotDiv.addEventListener('click', (e)=>{
+        // quick fill dinner on single click if empty and top recipe exists
+        if(!existing && slot==='Dinner' && state.recipes.length && e.target.tagName!=='BUTTON'){
+          openMealModal(key, slot);
+        }
+      });
+      day.appendChild(slotDiv);
+    });
+    grid.appendChild(day);
+  }
+}
+
+/* ==== Recipes UI helpers ==== */
+function populateRecipesUI(){
+  // dropdown
+  const sel = $('#recipeSelect');
+  sel.innerHTML = '<option value="">— Choose a recipe —</option>' +
+    state.recipes.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('');
+  sel.onchange = () => {
+    const r = byId(state.recipes, sel.value);
+    if(!r) return;
+    $('#mealName').value = r.name;
+    $('#mealIngredients').value = r.ingredients.join(', ');
+  };
+
+  // search + grid
+  const search = $('#recipeSearch');
+  const grid = $('#topRecipes');
+  function usageCount(r){ return state.recipeUsage[r.id] || 0; }
+  function renderGrid(){
+    const q = (search.value||'').toLowerCase();
+    const list = state.recipes
+      .slice()
+      .sort((a,b)=> usageCount(b) - usageCount(a) || a.name.localeCompare(b.name))
+      .filter(r => !q || r.name.toLowerCase().includes(q) || r.ingredients.join(',').toLowerCase().includes(q))
+      .slice(0, 24); // keep it brisk
+    grid.innerHTML = list.map(r => 
+      `<div class="recipe-chip" data-id="${r.id}" title="${escapeHtml(r.ingredients.join(', '))}">
+         <span>${escapeHtml(r.name)}</span>
+         <small>★ ${usageCount(r)}</small>
+       </div>`
+    ).join('');
+    grid.querySelectorAll('.recipe-chip').forEach(chip => {
+      chip.addEventListener('click', ()=>{
+        const r = byId(state.recipes, chip.dataset.id);
+        if(!r) return;
+        $('#recipeSelect').value = r.id;
+        $('#mealName').value = r.name;
+        $('#mealIngredients').value = r.ingredients.join(', ');
+      });
+    });
+  }
+  search.oninput = renderGrid;
+  renderGrid();
+}
+
+function sendIngredientsToGroceries(){
+  const wkKey=dateKeyLocal(startOfWeek(weekCursor)); const days=state.meals[wkKey]||{}; const items=[];
+  Object.values(days).forEach(day=>{ ['Breakfast','Lunch','Dinner'].forEach(slot=>{ const m=day[slot]; if(m?.ingredients?.length) items.push(...m.ingredients); }); });
+  const unique=[...new Set(items.map(s=>s.toLowerCase().trim()))];
+  unique.forEach(text=> state.lists.groceries.push({ id: uid(), text, qty:'', done:false }) );
+  saveState(); alert('Ingredients added to Groceries!'); renderLists();
+}
+
+function renderSettings(){
+  const ul=$('#memberList'); ul.innerHTML='';
+  state.members.forEach(m=>{
+    const li=document.createElement('li'); li.className='member-row';
+    li.innerHTML=`<span class="member-chip"><span class="dot" style="background:${m.color};width:.8rem;height:.8rem;border-radius:50%"></span>${escapeHtml(m.name)}</span>
+      <input type="color" value="${m.color}" aria-label="Color for ${m.name}" />
+      <button class="secondary rename">Rename</button>
+      <button class="danger remove">Remove</button>`;
+    li.querySelector('input[type="color"]').addEventListener('input', e=>{ m.color=e.target.value; saveState(); renderCalendar(); renderChores(); });
+    li.querySelector('.rename').addEventListener('click', ()=>{ const name=prompt('New name', m.name); if(name){ m.name=name; saveState(); renderSettings(); renderCalendar(); renderChores(); } });
+    li.querySelector('.remove').addEventListener('click', ()=>{ if(!confirm('Remove member? Events/chores will remain with this member ID.')) return; state.members=state.members.filter(x=>x.id!==m.id); saveState(); renderSettings(); renderCalendar(); renderChores(); });
+    ul.appendChild(li);
+  });
+  $('#addMemberBtn').onclick=()=>{ const name=prompt('Member name'); if(!name) return; state.members.push({ id: uid(), name, color:'#f59e0b' }); saveState(); renderSettings(); renderCalendar(); renderChores(); };
+  $$('.themeBtn').forEach(btn=> btn.onclick=()=>{ state.settings.theme=btn.dataset.theme; saveState(); ensureTheme(); });
+  $('#exportJsonBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); downloadBlob(blob,'family-command-center.json'); };
+  $('#importJsonInput').onchange=async (e)=>{ const f=e.target.files[0]; if(!f) return; try{ const imported=JSON.parse(await f.text()); state=imported; saveState(); ensureTheme(); renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); alert('Import successful!'); }catch(err){ alert('Import failed: '+err.message); } };
+  $('#exportIcsBtn').onclick=()=>{ const ics=buildICS(state.events); const blob=new Blob([ics],{type:'text/calendar'}); downloadBlob(blob,'family-events.ics'); };
+
+  // Recipes panel
+  const list = $('#recipeList');
+  if(list){
+    list.innerHTML='';
+    state.recipes.forEach(r=>{
+      const li=document.createElement('li'); li.className='card';
+      const count = state.recipeUsage[r.id] || 0;
+      li.innerHTML = `<div class="row space-between align-center wrap">
+          <strong>${escapeHtml(r.name)}</strong>
+          <div class="row gap">
+            <span class="muted">★ ${count}</span>
+            <button class="secondary edit">Edit</button>
+            <button class="danger delete">Delete</button>
+          </div>
+        </div>
+        <div class="muted">${escapeHtml(r.ingredients.join(', '))}</div>`;
+      li.querySelector('.edit').addEventListener('click', ()=>{
+        const name=prompt('Recipe name', r.name); if(!name) return;
+        const ing=prompt('Ingredients (comma separated)', r.ingredients.join(', '));
+        if(ing===null) return;
+        r.name = name.trim();
+        r.ingredients = ing.split(',').map(s=>s.trim()).filter(Boolean);
+        saveState(); renderSettings();
+      });
+      li.querySelector('.delete').addEventListener('click', ()=>{
+        if(!confirm('Delete recipe?')) return;
+        delete state.recipeUsage[r.id];
+        state.recipes = state.recipes.filter(x=>x.id !== r.id);
+        saveState(); renderSettings();
+      });
+      list.appendChild(li);
+    });
+    $('#addRecipeBtn')?.addEventListener('click', ()=>{
+      const name=prompt('Recipe name'); if(!name) return;
+      const ing=prompt('Ingredients (comma separated)','');
+      const ingredients=(ing||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const id = uid();
+      state.recipes.push({ id, name: name.trim(), ingredients });
+      state.recipeUsage[id] = 0;
+      saveState(); renderSettings();
+    });
+  }
+}
+function buildICS(events){
+  const dtstamp=new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Family Command Center//EN'];
+  events.forEach(e=>{
+    const dtStart=new Date(e.start).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+    const dtEnd=new Date(e.end).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+    const m=byId(state.members,e.memberId);
+    lines.push('BEGIN:VEVENT','UID:'+e.id+'@fcc','DTSTAMP:'+dtstamp,'DTSTART:'+dtStart,'DTEND:'+dtEnd,'SUMMARY:'+icsEscape((m?`[${m.name}] `:'')+e.title));
+    if(e.location) lines.push('LOCATION:'+icsEscape(e.location));
+    if(e.notes) lines.push('DESCRIPTION:'+icsEscape(e.notes));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR'); return lines.join('\r\n');
+}
+function icsEscape(s){ return s.replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
+function downloadBlob(blob, filename){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0); }
+
+function boot(){
+  ensureTheme();
+  agendaSelectedKey = dateKeyLocal(new Date());
+  renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings();
+  setActive('meals'); // jump straight to meals for convenience
+}
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
