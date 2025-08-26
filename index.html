@@ -16,6 +16,19 @@
     });
   }
 </script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import { firebaseConfig, HOUSEHOLD_ID } from "./firebase-config.js";
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  // Expose Firestore and helper functions globally so inline script can access them
+  window.__fcc = {
+    db,
+    HOUSEHOLD_ID,
+    firestore: { doc, getDoc, setDoc, onSnapshot }
+  };
+</script>
 <style>
 :root { --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --primary:#2563eb; --danger:#dc2626; --grid:#e5e7eb; --ok:#16a34a; --shadow:0 2px 10px rgba(0,0,0,.06); }
 @media (prefers-color-scheme: dark){ :root{ --bg:#0b0e14; --fg:#e5e7eb; --muted:#9aa0a6; --card:#171b22; --grid:#222936; } }
@@ -417,7 +430,11 @@ const defaultData = () => ({
   recipeUsage: {} // recipeId -> count
 });
 function uid(){ return Math.random().toString(36).slice(2,10); }
-let state = loadState();
+// We'll initialize state asynchronously after loading from Firestore.
+let state = null;
+// Firestore realtime subscription and last write timestamp
+let _unsub = null;
+let _lastWrite = 0;
 function loadState(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
@@ -435,6 +452,78 @@ function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); 
 function ensureTheme(){
   const root=document.documentElement;
   state.settings.theme==='auto'?root.removeAttribute('data-theme'):root.setAttribute('data-theme',state.settings.theme);
+}
+
+// --- Firestore integration helpers ---
+// Migrate parsed data to ensure all expected fields exist and set defaults for missing keys
+function migrate(parsed){
+  const p = parsed || {};
+  if(!p.lists) p.lists = { groceries: [], todos: [] };
+  if(!p.meals) p.meals = {};
+  if(!p.settings) p.settings = { theme: 'auto' };
+  if(!p.recipes) p.recipes = [];
+  if(!p.recipeUsage) p.recipeUsage = {};
+  // Provide default members if missing or empty
+  if(!Array.isArray(p.members) || p.members.length === 0){
+    p.members = defaultData().members;
+  }
+  if(!Array.isArray(p.events)) p.events = [];
+  if(!Array.isArray(p.chores)) p.chores = [];
+  return p;
+}
+
+// Get a Firestore document reference for this household
+function firestoreDoc(){
+  const fcc = window.__fcc;
+  return fcc && fcc.firestore.doc(fcc.db, 'households', fcc.HOUSEHOLD_ID);
+}
+
+// Load state from Firestore with localStorage fallback and realtime updates
+async function loadState(){
+  let base = null;
+  try{ base = JSON.parse(localStorage.getItem(STORAGE_KEY)); }catch{}
+  if(!base) base = defaultData();
+  state = migrate(base);
+  try{
+    const fcc = window.__fcc;
+    if(!fcc?.db) return;
+    const ref = firestoreDoc();
+    const snap = await fcc.firestore.getDoc(ref);
+    if(snap.exists()){
+      state = migrate(snap.data());
+    } else {
+      await fcc.firestore.setDoc(ref, state, { merge: true });
+    }
+    // Clean up existing listener if any
+    if(_unsub) _unsub();
+    // Subscribe to realtime updates
+    _unsub = fcc.firestore.onSnapshot(ref, (docSnap) => {
+      // Ignore updates immediately after our own writes to avoid thrashing
+      if(Date.now() - _lastWrite < 400) return;
+      if(docSnap.exists()){
+        state = migrate(docSnap.data());
+        ensureTheme();
+        // Re-render all views when remote state changes
+        renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings();
+      }
+    });
+  }catch(e){
+    console.warn('Firestore load failed, staying local only', e);
+  }
+}
+
+// Save state to localStorage and Firestore
+function saveState(){
+  // Always keep a local backup
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch{}
+  try{
+    const fcc = window.__fcc;
+    if(!fcc?.db) return;
+    _lastWrite = Date.now();
+    return fcc.firestore.setDoc(firestoreDoc(), state, { merge: true });
+  }catch(e){
+    console.warn('Firestore save failed (using local only):', e);
+  }
 }
 
 const confettiCanvas = $('#confettiCanvas'); const ctx = confettiCanvas.getContext('2d');
@@ -992,7 +1081,9 @@ function buildICS(events){
 function icsEscape(s){ return s.replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
 function downloadBlob(blob, filename){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0); }
 
-function boot(){
+async function boot(){
+  // Load state (from Firestore if available) before rendering
+  await loadState();
   ensureTheme();
   agendaSelectedKey = dateKeyLocal(new Date());
   renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings();
