@@ -30,7 +30,13 @@
   };
 </script>
 <style>
-:root { --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --primary:#2563eb; --danger:#dc2626; --grid:#e5e7eb; --ok:#16a34a; --shadow:0 2px 10px rgba(0,0,0,.06); }
+:root { --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --primary:#2563eb; --danger:#dc2626; --grid:#e5e7eb; --ok:#16a34a; --shadow:0 2px 10px rgba(0,0,0,.06);
+  /* additional accent colours for nav buttons */
+  --color-calendar: var(--primary);
+  --color-chores: #16a34a; /* green */
+  --color-lists: #8b5cf6;  /* purple */
+  --color-meals: #ea580c;  /* orange */
+ }
 @media (prefers-color-scheme: dark){ :root{ --bg:#0b0e14; --fg:#e5e7eb; --muted:#9aa0a6; --card:#171b22; --grid:#222936; } }
 :root[data-theme="dark"]{ --bg:#0b0e14; --fg:#e5e7eb; --muted:#9aa0a6; --card:#171b22; --grid:#222936; }
 :root[data-theme="light"]{ --bg:#fff; --fg:#111; --muted:#6b7280; --card:#f3f4f6; --grid:#e5e7eb; }
@@ -41,14 +47,29 @@ body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Aria
 h1{margin:0;font-size:1.15rem}
 .settings-btn{background:var(--card); border:1px solid var(--grid); padding:.5rem .75rem; border-radius:.5rem; cursor:pointer}
 .settings-btn:hover{outline:2px solid var(--primary); outline-offset:1px}
-.app{display:grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px);}
+.app{display:grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 64px);} 
 @media (max-width: 900px){ .app{ grid-template-columns: 72px 1fr; } .nav .label{ display:none; } }
 .nav{border-right:1px solid var(--grid); background:var(--bg); padding:.75rem; display:flex; flex-direction:column; gap:.75rem;}
 .nav h2{ font-size:.9rem; color:var(--muted); margin:.25rem .25rem; }
 .nav-btn{display:flex; align-items:center; gap:.75rem; width:100%; background:var(--card); border:1px solid var(--grid); padding:1rem .9rem; border-radius:.8rem; cursor:pointer; font-weight:600; text-align:left;}
 .nav-btn .dot{ width:.9rem; height:.9rem; border-radius:50%; background:var(--primary); opacity:.85; }
 .nav-btn:hover{ outline:2px solid var(--primary); outline-offset:1px; }
-.nav-btn.active{ border-color:transparent; color:#fff; background:linear-gradient(0deg, var(--primary), var(--primary)); }
+/* Assign per-section colours to nav buttons and their active states */
+.nav-btn[data-section="calendar"] .dot{ background:var(--color-calendar); }
+.nav-btn[data-section="chores"] .dot{ background:var(--color-chores); }
+.nav-btn[data-section="lists"] .dot{ background:var(--color-lists); }
+.nav-btn[data-section="meals"] .dot{ background:var(--color-meals); }
+
+.nav-btn[data-section="calendar"]:hover{ outline:2px solid var(--color-calendar); }
+.nav-btn[data-section="chores"]:hover{ outline:2px solid var(--color-chores); }
+.nav-btn[data-section="lists"]:hover{ outline:2px solid var(--color-lists); }
+.nav-btn[data-section="meals"]:hover{ outline:2px solid var(--color-meals); }
+
+/* Active state backgrounds and text colour */
+.nav-btn[data-section="calendar"].active{ border-color:transparent; color:#fff; background:var(--color-calendar); }
+.nav-btn[data-section="chores"].active{ border-color:transparent; color:#fff; background:var(--color-chores); }
+.nav-btn[data-section="lists"].active{ border-color:transparent; color:#fff; background:var(--color-lists); }
+.nav-btn[data-section="meals"].active{ border-color:transparent; color:#fff; background:var(--color-meals); }
 main{ padding:1rem; max-width:1400px; position:relative; z-index:1; }
 .section{ display:none; }
 .section.active{ display:block; }
@@ -121,6 +142,20 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
   .meal-grid{ grid-template-columns: 1fr; }
   .calendar-grid .cell{ min-height:70px; }
 }
+/* Added styles for profile pills, selected calendar cell, and quick buttons */
+.profile-pills{ display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.25rem; }
+.profile-pill{ display:flex; align-items:center; gap:.35rem; padding:.25rem .5rem; border:1px solid var(--grid); border-radius:999px; cursor:pointer; font-size:.85rem; background:var(--card); }
+.profile-pill .dot{ width:.75rem; height:.75rem; border-radius:50%; }
+.profile-pill.active{ border-color:var(--primary); background:color-mix(in srgb, var(--primary) 20%, var(--card)); color:var(--primary); font-weight:600; }
+.calendar-grid .cell.selected{ background:color-mix(in srgb, var(--primary) 10%, var(--bg)); border:2px solid var(--primary); border-radius:.5rem; }
+.calendar-grid .cell.selected .date{ font-weight:700; color:var(--primary); }
+.quick-buttons{ display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.5rem; }
+.quick-buttons button{ font-size:.75rem; padding:.25rem .5rem; }
+.member-chip.active{ border-color:var(--primary); color:var(--primary); font-weight:600; background:color-mix(in srgb, var(--primary) 10%, var(--card)); }
+/* Styles for custom button configuration list */
+.custom-buttons-list .custom-row{ display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem; }
+.custom-buttons-list label{ display:flex; flex-direction:column; font-size:.85rem; }
+.custom-buttons-list input[type="text"]{ flex:1; }
 </style>
 </head>
 <body>
@@ -162,6 +197,8 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
                 <label> Member:
                   <select id="memberFilter"></select>
                 </label>
+                <!-- Profile pills for quick member switching -->
+                <div id="profilePills" class="profile-pills"></div>
                 <button id="todayBtn">Today</button>
                 <button id="addEventBtn">+ Event</button>
               </div>
@@ -171,10 +208,12 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
 
           <aside class="day-agenda">
             <div class="row space-between align-center">
-              <h3 style="margin:0">Today</h3>
+              <h3 id="agendaHeading" style="margin:0"></h3>
               <button id="agendaAddBtn" class="mini">+ Event</button>
             </div>
             <div class="muted" id="agendaDateLabel"></div>
+            <!-- Quick buttons for selected day -->
+            <div id="quickButtons" class="quick-buttons"></div>
             <ul id="agendaList" class="agenda-list"></ul>
           </aside>
         </div>
@@ -197,6 +236,8 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
             </select>
           </label>
         </div>
+        <!-- Profile pills for quick member switching within chores -->
+        <div id="profilePillsChores" class="profile-pills"></div>
         <ul id="choreList" class="card-list"></ul>
       </section>
 
@@ -261,6 +302,12 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
             <h3>Recipes (Common Meals)</h3>
             <div class="row gap wrap"><button id="addRecipeBtn">+ Recipe</button></div>
             <ul id="recipeList" class="card-list"></ul>
+          </div>
+          <!-- Quick Buttons Customisation -->
+          <div class="box">
+            <h3>Quick Buttons</h3>
+            <div id="customButtonsList" class="custom-buttons-list"></div>
+            <small class="muted">Configure the label and colour of up to six quick action buttons. Changes save automatically.</small>
           </div>
         </div>
       </section>
@@ -399,6 +446,15 @@ const defaultData = () => ({
   lists: { groceries: [], todos: [] },
   meals: {},
   settings: { theme: 'auto' },
+  // default definitions for custom quick buttons (six slots)
+  customButtons: [
+    { label: 'Custom 1', color: '#fde047' },
+    { label: 'Custom 2', color: '#fb7185' },
+    { label: 'Custom 3', color: '#34d399' },
+    { label: 'Custom 4', color: '#a78bfa' },
+    { label: 'Custom 5', color: '#f472b6' },
+    { label: 'Custom 6', color: '#4ade80' }
+  ],
   recipes: [
     { id: uid(), name: "Three Cheese Pasta Bake",
       ingredients: ["cheddar cheese","mozzarella","parmesan","penne pasta","courgette","fresh tomatoes","tinned chopped tomatoes","basil","veg stock cube"] },
@@ -469,6 +525,8 @@ function migrate(parsed){
   }
   if(!Array.isArray(p.events)) p.events = [];
   if(!Array.isArray(p.chores)) p.chores = [];
+  // Provide default custom buttons if missing
+  if(!Array.isArray(p.customButtons)) p.customButtons = defaultData().customButtons;
   return p;
 }
 
@@ -504,7 +562,7 @@ async function loadState(){
         state = migrate(docSnap.data());
         ensureTheme();
         // Re-render all views when remote state changes
-        renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings();
+        renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); renderProfilePills(); renderQuickButtons();
       }
     });
   }catch(e){
@@ -567,19 +625,70 @@ function closeDialog(id){ const d=document.getElementById(id); if(d?.open) d.clo
 
 let calCursor = atMidnight(new Date());
 let agendaSelectedKey = dateKeyLocal(new Date());
+// New variable to track active profile (selected member)
+let selectedProfileId = 'all';
+
 $('#prevMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); renderCalendar(); });
 $('#nextMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); renderCalendar(); });
-$('#todayBtn').addEventListener('click', ()=>{ calCursor = atMidnight(new Date()); agendaSelectedKey = dateKeyLocal(new Date()); renderCalendar(); renderAgenda(); });
-$('#addEventBtn').addEventListener('click', ()=>openEventModal());
-$('#agendaAddBtn').addEventListener('click', ()=>openEventModal(undefined, agendaSelectedKey));
+$('#todayBtn').addEventListener('click', ()=>{ calCursor = atMidnight(new Date()); agendaSelectedKey = dateKeyLocal(new Date()); renderCalendar(); renderAgenda(); renderProfilePills(); renderQuickButtons(); });
+// Updated add event button to prefill selected day and member
+$('#addEventBtn').addEventListener('click', ()=>openEventModal(undefined, agendaSelectedKey, selectedProfileId));
+$('#agendaAddBtn').addEventListener('click', ()=>openEventModal(undefined, agendaSelectedKey, selectedProfileId));
+
+function renderProfilePills(){
+  // Render profile pills in all containers with class 'profile-pills'
+  const containers = document.querySelectorAll('.profile-pills');
+  if(!containers || containers.length === 0) return;
+  const members = [{id:'all', name:'All', color:'#6b7280'}, ...state.members];
+  containers.forEach(container => {
+    container.innerHTML = '';
+    members.forEach(m => {
+      const pill = document.createElement('div');
+      pill.className = 'profile-pill';
+      pill.dataset.memberId = m.id;
+      if(m.id === selectedProfileId) pill.classList.add('active');
+      pill.innerHTML = `<span class="dot" style="background:${m.color};"></span><span>${escapeHtml(m.name)}</span>`;
+      pill.addEventListener('click', ()=>{
+        selectedProfileId = m.id;
+        // sync dropdown
+        const memberFilter = $('#memberFilter');
+        if(memberFilter) memberFilter.value = m.id;
+        renderCalendar();
+        renderAgenda();
+        renderProfilePills();
+        renderQuickButtons();
+        renderChores();
+        highlightMemberChips();
+      });
+      container.appendChild(pill);
+    });
+  });
+}
+
+function highlightMemberChips(){
+  // highlight any member chips to reflect selected profile
+  $$('.member-chip').forEach(chip=>{
+    const id = chip.dataset.memberId || chip.getAttribute('data-member-id');
+    chip.classList.toggle('active', id === selectedProfileId);
+  });
+}
 
 function renderCalendar(){
-  $('#monthLabel').textContent = calCursor.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  // Ensure drop-down matches selected profile
   const memberFilter = $('#memberFilter');
   memberFilter.innerHTML = '<option value="all">All members</option>' + state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  if(!memberFilter.value) memberFilter.value='all';
-  memberFilter.onchange = () => { renderCalendar(); renderAgenda(); };
+  if(!memberFilter.value) memberFilter.value = selectedProfileId;
+  memberFilter.value = selectedProfileId;
+  memberFilter.onchange = () => {
+    selectedProfileId = memberFilter.value;
+    renderCalendar();
+    renderAgenda();
+    renderProfilePills();
+    renderQuickButtons();
+    highlightMemberChips();
+  };
 
+  $('#monthLabel').textContent = calCursor.toLocaleDateString(undefined,{month:'long',year:'numeric'});
   const grid=$('#calendarGrid'); grid.innerHTML='';
   ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d=>{ const c=document.createElement('div'); c.className='cell dow'; c.textContent=d; grid.appendChild(c); });
 
@@ -594,10 +703,14 @@ function renderCalendar(){
     const dateLabel=document.createElement('div'); dateLabel.className='date';
     const key = dateKeyLocal(d);
     dateLabel.textContent = d.getMonth()===calCursor.getMonth()? d.getDate() : '';
-    if (key === agendaSelectedKey) { dateLabel.style.fontWeight='700'; }
     cell.appendChild(dateLabel);
 
-    const memberId=memberFilter.value;
+    // highlight selected day
+    if (key === agendaSelectedKey) {
+      cell.classList.add('selected');
+    }
+
+    const memberId=memberFilter.value || 'all';
 
     const dayEvents=state.events
       .filter(e => e.start.slice(0,10) <= key && e.end.slice(0,10) >= key)
@@ -606,10 +719,13 @@ function renderCalendar(){
 
     dayEvents.forEach(e=>{
       const m=byId(state.members,e.memberId) || {color:'#999', name:''};
+      // choose colour: prefer event-specific colour (for custom buttons), else use member colour
+      const colour = e.color || m.color;
       const pill=document.createElement('div'); pill.className='event-pill';
-      pill.style.borderColor=m.color; pill.style.boxShadow='inset 0 0 0 999px '+hex2rgba(m.color,.14);
+      pill.style.borderColor = colour;
+      pill.style.boxShadow = 'inset 0 0 0 999px ' + hex2rgba(colour, .14);
       const time=new Date(e.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-      pill.innerHTML=`<span class="dot" style="background:${m.color};width:.6rem;height:.6rem;border-radius:50%"></span><span>${time} ${escapeHtml(e.title)}</span>`;
+      pill.innerHTML=`<span class="dot" style="background:${colour};width:.6rem;height:.6rem;border-radius:50%"></span><span>${time} ${escapeHtml(e.title)}</span>`;
       pill.title=(m.name?`[${m.name}] `:'')+e.title;
       pill.addEventListener('click',()=>openEventModal(e.id));
       cell.appendChild(pill);
@@ -630,11 +746,13 @@ function renderCalendar(){
     });
 
     cell.addEventListener('click', ()=>{ agendaSelectedKey = key; renderAgenda(); renderCalendar(); });
-    cell.addEventListener('dblclick',()=>openEventModal(undefined, key));
+    cell.addEventListener('dblclick',()=>openEventModal(undefined, key, selectedProfileId));
     grid.appendChild(cell);
   }
 
   renderAgenda();
+  renderProfilePills();
+  renderQuickButtons();
 }
 
 function renderAgenda(){
@@ -643,6 +761,21 @@ function renderAgenda(){
   const date = parseDateOnlyLocal(agendaSelectedKey);
   const memberId = $('#memberFilter').value || 'all';
   label.textContent = date.toLocaleDateString(undefined,{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  // Set heading relative to today
+  const headingEl = $('#agendaHeading');
+  if(headingEl){
+    const today = atMidnight(new Date());
+    const sel = atMidnight(date);
+    const diffDays = Math.round((sel - today)/(1000*60*60*24));
+    let headingText;
+    if(diffDays === 0) headingText = 'Today';
+    else if(diffDays === 1) headingText = 'Tomorrow';
+    else if(diffDays === -1) headingText = 'Yesterday';
+    else if(diffDays > 1) headingText = `In ${diffDays} days`;
+    else headingText = `${Math.abs(diffDays)} days ago`;
+    headingEl.textContent = headingText;
+  }
 
   const events = state.events
     .filter(e => e.start.slice(0,10) <= agendaSelectedKey && e.end.slice(0,10) >= agendaSelectedKey)
@@ -657,7 +790,9 @@ function renderAgenda(){
   if (!events.length && !chores.length){
     const li = document.createElement('li'); li.className='agenda-item';
     li.innerHTML='<span class="muted">Nothing scheduled</span><span></span>';
-    list.appendChild(li); return;
+    list.appendChild(li);
+    renderQuickButtons();
+    return;
   }
 
   events.forEach(e=>{
@@ -675,6 +810,110 @@ function renderAgenda(){
     li.querySelector('button').addEventListener('click', ()=>openChoreModal(c.id));
     list.appendChild(li);
   });
+  renderQuickButtons();
+}
+
+function renderQuickButtons(){
+  const container = $('#quickButtons');
+  if(!container) return;
+  container.innerHTML = '';
+  const dateKey = agendaSelectedKey;
+  const memberId = selectedProfileId;
+  // Event quick button
+  const btnEvent = document.createElement('button');
+  btnEvent.className = 'mini';
+  btnEvent.textContent = '+ Event';
+  btnEvent.addEventListener('click', ()=>openEventModal(undefined, dateKey, memberId));
+  container.appendChild(btnEvent);
+  // Chore quick button
+  const btnChore = document.createElement('button');
+  btnChore.className = 'mini';
+  btnChore.textContent = '+ Chore';
+  btnChore.addEventListener('click', ()=>openChoreModal(undefined, memberId, dateKey));
+  container.appendChild(btnChore);
+  // Groceries quick button
+  const btnGro = document.createElement('button');
+  btnGro.className = 'mini';
+  btnGro.textContent = '+ Grocery';
+  btnGro.addEventListener('click', ()=>openListItemModal('groceries'));
+  container.appendChild(btnGro);
+  // To-Do quick button
+  const btnTodo = document.createElement('button');
+  btnTodo.className = 'mini';
+  btnTodo.textContent = '+ To-Do';
+  btnTodo.addEventListener('click', ()=>openListItemModal('todos'));
+  container.appendChild(btnTodo);
+  // Meal quick button
+  const btnMeal = document.createElement('button');
+  btnMeal.className = 'mini';
+  btnMeal.textContent = '+ Meal';
+  btnMeal.addEventListener('click', ()=>openMealModal(dateKey));
+  container.appendChild(btnMeal);
+  // Recipe quick button
+  const btnRecipe = document.createElement('button');
+  btnRecipe.className = 'mini';
+  btnRecipe.textContent = '+ Recipe';
+  btnRecipe.addEventListener('click', ()=>{
+    openMealModal(dateKey);
+    setTimeout(()=>{ $('#recipeSearch')?.focus(); }, 0);
+  });
+  container.appendChild(btnRecipe);
+
+  // Custom quick buttons defined by the user
+  if(state.customButtons && Array.isArray(state.customButtons)){
+    state.customButtons.forEach((btnDef, idx) => {
+      const cbtn = document.createElement('button');
+      cbtn.className = 'mini';
+      cbtn.textContent = btnDef.label || `Btn ${idx+1}`;
+      // Apply custom colour if provided
+      if(btnDef.color){
+        cbtn.style.background = btnDef.color;
+        // set contrasting text colour (simple heuristic: if dark color lighten text)
+        try{
+          const rgb = parseInt(btnDef.color.replace('#',''), 16);
+          const r = (rgb >> 16) & 0xFF;
+          const g = (rgb >> 8) & 0xFF;
+          const b = rgb & 0xFF;
+          const luminance = (0.299*r + 0.587*g + 0.114*b)/255;
+          cbtn.style.color = luminance > 0.6 ? '#000' : '#fff';
+        } catch(e){ }
+      }
+      cbtn.addEventListener('click', ()=> handleCustomButtonClick(idx));
+      container.appendChild(cbtn);
+    });
+  }
+}
+
+// Handle clicks on custom quick buttons to create an event and advance the selected day
+function handleCustomButtonClick(index){
+  const btnDef = state.customButtons && state.customButtons[index];
+  if(!btnDef || !btnDef.label) return;
+  // Determine start and end times as local date strings without timezone conversion.
+  // Using the selected date key ensures the event only spans that day regardless of timezone.
+  const dateKey = agendaSelectedKey;
+  const startStr = `${dateKey}T00:00:00`;
+  const endStr = `${dateKey}T23:59:00`;
+  // Determine member: use selected profile if not 'all', else first member
+  let memberId = (selectedProfileId && selectedProfileId !== 'all') ? selectedProfileId : (state.members[0]?.id || '');
+  const newEvent = {
+    id: uid(),
+    title: btnDef.label,
+    start: startStr,
+    end: endStr,
+    memberId: memberId,
+    location: '',
+    notes: '',
+    // store the button colour on the event so the pill matches the button
+    color: btnDef.color || null
+  };
+  state.events.push(newEvent);
+  saveState();
+  // Advance to next day and re-render
+  const currentDate = parseDateOnlyLocal(dateKey);
+  const next = new Date(currentDate); next.setDate(currentDate.getDate()+1);
+  agendaSelectedKey = dateKeyLocal(next);
+  renderCalendar();
+  // renderCalendar already triggers renderAgenda and renderQuickButtons
 }
 
 const eventModal=$('#eventModal');
@@ -695,10 +934,16 @@ $('#saveEventBtn').addEventListener('click', ()=>{
   };
   if(!payload.title) return;
   const exists=state.events.some(e=>e.id===id);
+  // preserve custom colour if editing an existing event that has one
+  if(exists){
+    const prev = byId(state.events, id);
+    if(prev && prev.color) payload.color = prev.color;
+  }
   state.events = exists ? state.events.map(e=>e.id===id?payload:e) : [...state.events,payload];
   saveState(); eventModal.close(); renderCalendar();
 });
-function openEventModal(eventId, dateKey){
+// Modify openEventModal to accept optional dateKey and memberId
+function openEventModal(eventId, dateKey, memberId){
   $('#eventModalTitle').textContent = eventId?'Edit Event':'New Event';
   const sel=$('#eventMember'); sel.innerHTML=state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   if(eventId){
@@ -712,13 +957,16 @@ function openEventModal(eventId, dateKey){
     const start = dateKey ? parseDateOnlyLocal(dateKey) : new Date(); if (dateKey) start.setHours(9,0,0,0);
     const end=new Date(start); end.setHours(end.getHours()+1);
     $('#eventStart').value=toLocalInput(start.toISOString()); $('#eventEnd').value=toLocalInput(end.toISOString());
-    $('#eventMember').value=state.members[0]?.id ?? ''; $('#eventLocation').value=''; $('#eventNotes').value='';
+    // set member based on parameter or selected profile
+    let defaultMember = memberId && memberId !== 'all' ? memberId : (state.members[0]?.id ?? '');
+    $('#eventMember').value=defaultMember;
+    $('#eventLocation').value=''; $('#eventNotes').value='';
     $('#deleteEventBtn').style.display='none';
   }
   eventModal.showModal();
 }
 
-$('#addChoreBtn').addEventListener('click', ()=>openChoreModal());
+$('#addChoreBtn').addEventListener('click', ()=>openChoreModal(undefined, selectedProfileId, agendaSelectedKey));
 const choreModal=$('#choreModal');
 $('#saveChoreBtn').addEventListener('click', ()=>{
   const id=$('#choreId').value || uid();
@@ -739,7 +987,8 @@ $('#deleteChoreBtn').addEventListener('click', ()=>{
   const id=$('#choreId').value; if(!id) return choreModal.close();
   state.chores=state.chores.filter(c=>c.id!==id); saveState(); choreModal.close(); renderChores(); renderCalendar();
 });
-function openChoreModal(choreId){
+// modify openChoreModal to accept optional memberId and dateKey for prefill
+function openChoreModal(choreId, memberId, dateKey){
   const sel=$('#choreAssignee'); sel.innerHTML=state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   if(choreId){
     const c=byId(state.chores,choreId);
@@ -750,8 +999,11 @@ function openChoreModal(choreId){
   } else {
     $('#choreModalTitle').textContent='New Chore';
     $('#choreId').value=''; $('#choreTitle').value='';
-    $('#choreAssignee').value=state.members[0]?.id ?? '';
-    $('#choreDue').value=''; $('#choreRepeat').value='none';
+    // prefill assignee with provided member or selected profile
+    let defaultAssignee = memberId && memberId !== 'all' ? memberId : (state.members[0]?.id ?? '');
+    $('#choreAssignee').value=defaultAssignee;
+    $('#choreDue').value=dateKey || '';
+    $('#choreRepeat').value='none';
     $('#deleteChoreBtn').style.display='none';
   }
   choreModal.showModal();
@@ -759,9 +1011,24 @@ function openChoreModal(choreId){
 function renderChores(){
   const assigneeFilter=$('#choreAssigneeFilter');
   assigneeFilter.innerHTML='<option value="all">Anyone</option>'+state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  if(!assigneeFilter.value) assigneeFilter.value='all';
-  assigneeFilter.onchange=renderChores;
-  const statusFilter=$('#choreStatusFilter'); statusFilter.onchange=renderChores;
+  // keep filter in sync with selected profile
+  assigneeFilter.value = selectedProfileId || 'all';
+  assigneeFilter.onchange = () => {
+    // update selected profile when assignee filter changes
+    selectedProfileId = assigneeFilter.value;
+    // sync calendar member filter
+    const memberFilter = $('#memberFilter');
+    if(memberFilter) memberFilter.value = selectedProfileId;
+    renderCalendar();
+    renderAgenda();
+    renderProfilePills();
+    renderQuickButtons();
+    renderChores();
+    highlightMemberChips();
+  };
+  const statusFilter=$('#choreStatusFilter'); statusFilter.onchange = () => {
+    renderChores();
+  };
 
   const ul=$('#choreList'); ul.innerHTML='';
   const today=atMidnight(new Date());
@@ -779,7 +1046,7 @@ function renderChores(){
           <div class="row align-center gap wrap">
             <input class="chore-check" type="checkbox" ${c.done?'checked':''} aria-label="Done" />
             <strong class="chore-title">${escapeHtml(c.title)}</strong>
-            <span class="member-chip" title="${m?.name||'Unassigned'}"><span class="dot" style="background:${color};width:.8rem;height:.8rem;border-radius:50%"></span>${m?.name||'—'}</span>
+            <span class="member-chip" data-member-id="${c.assignee}" title="${m?.name||'Unassigned'}"><span class="dot" style="background:${color};width:.8rem;height:.8rem;border-radius:50%"></span>${m?.name||'—'}</span>
           </div>
           <span ${overdue?'style="color:var(--danger);font-weight:600"':'class="muted"'}>${dueText}</span>
         </div>
@@ -809,10 +1076,22 @@ function renderChores(){
         }
         saveState(); renderChores(); renderCalendar();
       });
+      // Click to select this member
+      const chip = li.querySelector('.member-chip');
+      chip.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        selectedProfileId = c.assignee;
+        const memberFilter = $('#memberFilter');
+        if(memberFilter) memberFilter.value = selectedProfileId;
+        renderCalendar(); renderAgenda(); renderProfilePills(); renderQuickButtons(); highlightMemberChips();
+      });
       li.querySelector('.edit').addEventListener('click', ()=>openChoreModal(c.id));
       li.querySelector('.delete').addEventListener('click', ()=>{ state.chores=state.chores.filter(x=>x.id!==c.id); saveState(); renderChores(); renderCalendar(); });
       ul.appendChild(li);
     });
+  highlightMemberChips();
+  // update profile pills within chores
+  renderProfilePills();
 }
 
 $$('.addListItemBtn').forEach(btn=> btn.addEventListener('click', ()=>openListItemModal(btn.dataset.list)) );
@@ -1006,19 +1285,19 @@ function renderSettings(){
   const ul=$('#memberList'); ul.innerHTML='';
   state.members.forEach(m=>{
     const li=document.createElement('li'); li.className='member-row';
-    li.innerHTML=`<span class="member-chip"><span class="dot" style="background:${m.color};width:.8rem;height:.8rem;border-radius:50%"></span>${escapeHtml(m.name)}</span>
+    li.innerHTML=`<span class="member-chip" data-member-id="${m.id}"><span class="dot" style="background:${m.color};width:.8rem;height:.8rem;border-radius:50%"></span>${escapeHtml(m.name)}</span>
       <input type="color" value="${m.color}" aria-label="Color for ${m.name}" />
       <button class="secondary rename">Rename</button>
       <button class="danger remove">Remove</button>`;
-    li.querySelector('input[type="color"]').addEventListener('input', e=>{ m.color=e.target.value; saveState(); renderCalendar(); renderChores(); });
-    li.querySelector('.rename').addEventListener('click', ()=>{ const name=prompt('New name', m.name); if(name){ m.name=name; saveState(); renderSettings(); renderCalendar(); renderChores(); } });
-    li.querySelector('.remove').addEventListener('click', ()=>{ if(!confirm('Remove member? Events/chores will remain with this member ID.')) return; state.members=state.members.filter(x=>x.id!==m.id); saveState(); renderSettings(); renderCalendar(); renderChores(); });
+    li.querySelector('input[type="color"]').addEventListener('input', e=>{ m.color=e.target.value; saveState(); renderCalendar(); renderChores(); renderProfilePills(); renderQuickButtons(); });
+    li.querySelector('.rename').addEventListener('click', ()=>{ const name=prompt('New name', m.name); if(name){ m.name=name; saveState(); renderSettings(); renderCalendar(); renderChores(); renderProfilePills(); renderQuickButtons(); } });
+    li.querySelector('.remove').addEventListener('click', ()=>{ if(!confirm('Remove member? Events/chores will remain with this member ID.')) return; state.members=state.members.filter(x=>x.id!==m.id); saveState(); renderSettings(); renderCalendar(); renderChores(); renderProfilePills(); renderQuickButtons(); });
     ul.appendChild(li);
   });
-  $('#addMemberBtn').onclick=()=>{ const name=prompt('Member name'); if(!name) return; state.members.push({ id: uid(), name, color:'#f59e0b' }); saveState(); renderSettings(); renderCalendar(); renderChores(); };
+  $('#addMemberBtn').onclick=()=>{ const name=prompt('Member name'); if(!name) return; state.members.push({ id: uid(), name, color:'#f59e0b' }); saveState(); renderSettings(); renderCalendar(); renderChores(); renderProfilePills(); renderQuickButtons(); };
   $$('.themeBtn').forEach(btn=> btn.onclick=()=>{ state.settings.theme=btn.dataset.theme; saveState(); ensureTheme(); });
   $('#exportJsonBtn').onclick=()=>{ const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); downloadBlob(blob,'family-command-center.json'); };
-  $('#importJsonInput').onchange=async (e)=>{ const f=e.target.files[0]; if(!f) return; try{ const imported=JSON.parse(await f.text()); state=imported; saveState(); ensureTheme(); renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); alert('Import successful!'); }catch(err){ alert('Import failed: '+err.message); } };
+  $('#importJsonInput').onchange=async (e)=>{ const f=e.target.files[0]; if(!f) return; try{ const imported=JSON.parse(await f.text()); state=imported; saveState(); ensureTheme(); renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); renderProfilePills(); renderQuickButtons(); alert('Import successful!'); }catch(err){ alert('Import failed: '+err.message); } };
   $('#exportIcsBtn').onclick=()=>{ const ics=buildICS(state.events); const blob=new Blob([ics],{type:'text/calendar'}); downloadBlob(blob,'family-events.ics'); };
 
   // Recipes panel
@@ -1063,6 +1342,41 @@ function renderSettings(){
       saveState(); renderSettings();
     });
   }
+
+  // Quick Buttons customisation panel
+  const customList = document.getElementById('customButtonsList');
+  if(customList){
+    customList.innerHTML = '';
+    // Ensure the array exists
+    if(!Array.isArray(state.customButtons)) state.customButtons = defaultData().customButtons;
+    state.customButtons.forEach((btnDef, idx) => {
+      const row = document.createElement('div');
+      row.className = 'custom-row';
+      row.innerHTML = `
+        <label>Label <input type="text" data-index="${idx}" value="${escapeHtml(btnDef.label||'')}" /></label>
+        <label>Colour <input type="color" data-index="${idx}" value="${btnDef.color||'#ffffff'}" /></label>
+      `;
+      customList.appendChild(row);
+    });
+    // Attach change listeners for labels
+    customList.querySelectorAll('input[type="text"]').forEach(inp => {
+      inp.addEventListener('input', (ev) => {
+        const index = parseInt(ev.target.getAttribute('data-index')); 
+        state.customButtons[index].label = ev.target.value;
+        saveState();
+        renderQuickButtons();
+      });
+    });
+    // Attach change listeners for colours
+    customList.querySelectorAll('input[type="color"]').forEach(inp => {
+      inp.addEventListener('input', (ev) => {
+        const index = parseInt(ev.target.getAttribute('data-index'));
+        state.customButtons[index].color = ev.target.value;
+        saveState();
+        renderQuickButtons();
+      });
+    });
+  }
 }
 function buildICS(events){
   const dtstamp=new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
@@ -1086,7 +1400,7 @@ async function boot(){
   await loadState();
   ensureTheme();
   agendaSelectedKey = dateKeyLocal(new Date());
-  renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings();
+  renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); renderProfilePills(); renderQuickButtons();
   setActive('meals'); // jump straight to meals for convenience
 }
 document.addEventListener('DOMContentLoaded', boot);
