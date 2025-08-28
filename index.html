@@ -151,10 +151,40 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
 .calendar-grid .cell.selected .date{ font-weight:700; color:var(--primary); }
 .quick-buttons{ display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.5rem; }
 .quick-buttons button{ font-size:.75rem; padding:.25rem .5rem; }
+/* Make custom quick buttons larger for prominence */
+.quick-buttons .custom-btn{
+  font-size:.85rem;
+  padding:.35rem .7rem;
+}
 .member-chip.active{ border-color:var(--primary); color:var(--primary); font-weight:600; background:color-mix(in srgb, var(--primary) 10%, var(--card)); }
 /* Styles for custom button configuration list */
-.custom-buttons-list .custom-row{ display:flex; align-items:center; gap:.5rem; margin-bottom:.5rem; }
-.custom-buttons-list label{ display:flex; flex-direction:column; font-size:.85rem; }
+/* Use a responsive grid for each custom button row.  Each input wraps neatly when space is constrained. */
+.custom-buttons-list .custom-row{
+  display:grid;
+  /* Each cell spans at least 140px and grows to fill available space; auto-fit wraps items to new rows as needed. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap:.5rem;
+  margin-bottom:.5rem;
+  align-items:flex-start;
+}
+/* Individual labels in the custom button editor */
+.custom-buttons-list .custom-row label{
+  display:flex;
+  flex-direction:column;
+  font-size:.85rem;
+}
+/* Ensure the remove button stays compact and does not stretch */
+.custom-buttons-list .custom-row .remove-btn{
+  justify-self:start;
+  align-self:center;
+  white-space:nowrap;
+}
+/* Generic label styles within custom-buttons-list */
+.custom-buttons-list label{
+  display:flex;
+  flex-direction:column;
+  font-size:.85rem;
+}
 .custom-buttons-list input[type="text"]{ flex:1; }
 </style>
 </head>
@@ -307,7 +337,7 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
           <div class="box">
             <h3>Quick Buttons</h3>
             <div id="customButtonsList" class="custom-buttons-list"></div>
-            <small class="muted">Configure the label and colour of up to six quick action buttons. Changes save automatically.</small>
+            <small class="muted">Configure label, colour, and times for your quick action buttons. Use + Add Button to add more and Remove to delete. Changes save automatically.</small>
           </div>
         </div>
       </section>
@@ -353,6 +383,8 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
           <option value="none">Does not repeat</option>
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
         </select>
       </label>
       <div class="row space-between">
@@ -448,12 +480,12 @@ const defaultData = () => ({
   settings: { theme: 'auto' },
   // default definitions for custom quick buttons (six slots)
   customButtons: [
-    { label: 'Custom 1', color: '#fde047' },
-    { label: 'Custom 2', color: '#fb7185' },
-    { label: 'Custom 3', color: '#34d399' },
-    { label: 'Custom 4', color: '#a78bfa' },
-    { label: 'Custom 5', color: '#f472b6' },
-    { label: 'Custom 6', color: '#4ade80' }
+    { label: 'Custom 1', color: '#fde047', startTime: '00:00', endTime: '23:59' },
+    { label: 'Custom 2', color: '#fb7185', startTime: '00:00', endTime: '23:59' },
+    { label: 'Custom 3', color: '#34d399', startTime: '00:00', endTime: '23:59' },
+    { label: 'Custom 4', color: '#a78bfa', startTime: '00:00', endTime: '23:59' },
+    { label: 'Custom 5', color: '#f472b6', startTime: '00:00', endTime: '23:59' },
+    { label: 'Custom 6', color: '#4ade80', startTime: '00:00', endTime: '23:59' }
   ],
   recipes: [
     { id: uid(), name: "Three Cheese Pasta Bake",
@@ -527,6 +559,16 @@ function migrate(parsed){
   if(!Array.isArray(p.chores)) p.chores = [];
   // Provide default custom buttons if missing
   if(!Array.isArray(p.customButtons)) p.customButtons = defaultData().customButtons;
+  // Ensure each custom button has startTime and endTime
+  if(Array.isArray(p.customButtons)){
+    p.customButtons = p.customButtons.map(btn => {
+      // ensure label and colour exist, then times
+      const out = { ...btn };
+      if(out.startTime == null) out.startTime = '00:00';
+      if(out.endTime == null) out.endTime = '23:59';
+      return out;
+    });
+  }
   return p;
 }
 
@@ -863,7 +905,8 @@ function renderQuickButtons(){
   if(state.customButtons && Array.isArray(state.customButtons)){
     state.customButtons.forEach((btnDef, idx) => {
       const cbtn = document.createElement('button');
-      cbtn.className = 'mini';
+      // add custom-btn class so custom buttons can be styled larger on calendar
+      cbtn.className = 'mini custom-btn';
       cbtn.textContent = btnDef.label || `Btn ${idx+1}`;
       // Apply custom colour if provided
       if(btnDef.color){
@@ -889,15 +932,26 @@ function handleCustomButtonClick(index){
   const btnDef = state.customButtons && state.customButtons[index];
   if(!btnDef || !btnDef.label) return;
   // Determine start and end times as local date strings without timezone conversion.
-  // Using the selected date key ensures the event only spans that day regardless of timezone.
+  // Use per-button startTime/endTime if configured, defaulting to whole-day.
   const dateKey = agendaSelectedKey;
-  const startStr = `${dateKey}T00:00:00`;
-  const endStr = `${dateKey}T23:59:00`;
+  let startTime = '00:00';
+  let endTime = '23:59';
+  if(btnDef && btnDef.startTime) startTime = btnDef.startTime;
+  if(btnDef && btnDef.endTime) endTime = btnDef.endTime;
+  // Build ISO-like strings (without timezone Z) to store local times
+  const startStr = `${dateKey}T${startTime}:00`;
+  const endStr = `${dateKey}T${endTime}:00`;
   // Determine member: use selected profile if not 'all', else first member
   let memberId = (selectedProfileId && selectedProfileId !== 'all') ? selectedProfileId : (state.members[0]?.id || '');
+  // Determine the event title: include member name if a specific profile is selected
+  let eventTitle = btnDef.label;
+  if(selectedProfileId && selectedProfileId !== 'all'){
+    const member = byId(state.members, selectedProfileId);
+    if(member && member.name) eventTitle = `${member.name} - ${btnDef.label}`;
+  }
   const newEvent = {
     id: uid(),
-    title: btnDef.label,
+    title: eventTitle,
     start: startStr,
     end: endStr,
     memberId: memberId,
@@ -1069,10 +1123,40 @@ function renderChores(){
         li.classList.toggle('completed', c.done);
         titleEl.classList.add('done-pop'); setTimeout(()=>titleEl.classList.remove('done-pop'), 250);
         if(c.done && c.repeat!=='none' && c.due){
-          const d=parseDateOnlyLocal(c.due);
-          if(c.repeat==='daily') d.setDate(d.getDate()+1);
-          if(c.repeat==='weekly') d.setDate(d.getDate()+7);
-          state.chores.push({ ...c, id: uid(), done:false, due: dateKeyLocal(d) });
+          // Create the next occurrence of a repeating chore when marked done.
+          // Use different logic depending on repeat frequency.
+          if(c.repeat==='daily' || c.repeat==='weekly'){
+            const d=parseDateOnlyLocal(c.due);
+            if(c.repeat==='daily') d.setDate(d.getDate()+1);
+            if(c.repeat==='weekly') d.setDate(d.getDate()+7);
+            state.chores.push({ ...c, id: uid(), done:false, due: dateKeyLocal(d) });
+          } else if(c.repeat==='monthly'){
+            // For monthly repeats, schedule on the same day next month (or last day if the next month has fewer days).
+            const prevDate = parseDateOnlyLocal(c.due);
+            let year = prevDate.getFullYear();
+            let month = prevDate.getMonth() + 1; // target month is current month + 1
+            let day = prevDate.getDate();
+            // Construct candidate date. JavaScript Date will adjust year overflow automatically.
+            let candidate = new Date(year, month, day);
+            // If the month overflows (i.e., candidate's month is not equal to target month modulo 12), adjust to last day of target month.
+            if(candidate.getMonth() !== (month % 12)){
+              // Last day of target month: create a date on the 0th day of the following month.
+              candidate = new Date(year, month + 1, 0);
+            }
+            state.chores.push({ ...c, id: uid(), done:false, due: dateKeyLocal(candidate) });
+          } else if(c.repeat==='yearly'){
+            // For yearly repeats, schedule on the same month and day next year (or last day if February 29 in a non-leap year).
+            const prevDate = parseDateOnlyLocal(c.due);
+            let year = prevDate.getFullYear() + 1;
+            let month = prevDate.getMonth();
+            let day = prevDate.getDate();
+            let candidate = new Date(year, month, day);
+            if(candidate.getMonth() !== month){
+              // Adjust to last day of the target month if the day does not exist in the new year (e.g. Feb 29).
+              candidate = new Date(year, month + 1, 0);
+            }
+            state.chores.push({ ...c, id: uid(), done:false, due: dateKeyLocal(candidate) });
+          }
         }
         saveState(); renderChores(); renderCalendar();
       });
@@ -1355,6 +1439,9 @@ function renderSettings(){
       row.innerHTML = `
         <label>Label <input type="text" data-index="${idx}" value="${escapeHtml(btnDef.label||'')}" /></label>
         <label>Colour <input type="color" data-index="${idx}" value="${btnDef.color||'#ffffff'}" /></label>
+        <label>Start <input type="time" data-index="${idx}" data-field="startTime" value="${btnDef.startTime||'00:00'}" /></label>
+        <label>End <input type="time" data-index="${idx}" data-field="endTime" value="${btnDef.endTime||'23:59'}" /></label>
+        <button class="danger mini remove-btn" data-index="${idx}" title="Remove">Remove</button>
       `;
       customList.appendChild(row);
     });
@@ -1376,6 +1463,38 @@ function renderSettings(){
         renderQuickButtons();
       });
     });
+    // Attach change listeners for start/end times
+    customList.querySelectorAll('input[type="time"]').forEach(inp => {
+      inp.addEventListener('input', (ev) => {
+        const index = parseInt(ev.target.getAttribute('data-index'));
+        const field = ev.target.getAttribute('data-field');
+        state.customButtons[index][field] = ev.target.value;
+        saveState();
+        renderQuickButtons();
+      });
+    });
+    // Attach remove button listeners
+    customList.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        const index = parseInt(ev.target.getAttribute('data-index'));
+        state.customButtons.splice(index, 1);
+        saveState();
+        renderSettings();
+        renderQuickButtons();
+      });
+    });
+    // Add button to append a new custom quick button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'secondary mini';
+    addBtn.textContent = '+ Add Button';
+    addBtn.addEventListener('click', () => {
+      // push a new default button definition
+      state.customButtons.push({ label: '', color: '#ffffff', startTime: '00:00', endTime: '23:59' });
+      saveState();
+      renderSettings();
+      renderQuickButtons();
+    });
+    customList.appendChild(addBtn);
   }
 }
 function buildICS(events){
