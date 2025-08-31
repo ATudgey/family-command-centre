@@ -355,6 +355,15 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
             <ul id="subsList" class="card-list"></ul>
             <small class="muted">Tip: some calendar servers may block direct requests. You can download and import the .ics file manually using the Import button above.</small>
           </div>
+
+          <!-- iCal sync settings -->
+          <div class="box">
+            <h3>iCal Sync Settings</h3>
+            <label>CORS proxy base (optional)
+              <input id="icsProxyInput" placeholder="e.g. https://your-worker.workers.dev" />
+            </label>
+            <small class="muted">If your calendar server blocks browsers, paste your Cloudflare worker URL here. Leave blank to fetch directly.</small>
+          </div>
         </div>
       </section>
     </main>
@@ -561,7 +570,11 @@ const defaultData = () => ({
   chores: [],
   lists: { groceries: [], todos: [] },
   meals: {},
-  settings: { theme: 'auto' },
+  // settings include theme and optional proxy base; when icsProxy is set,
+  // subscription URLs will be proxied via this base
+  // Pre-fill the default CORS proxy with the user's Cloudflare worker URL.  When
+  // deploying to other environments, update this value accordingly.
+  settings: { theme: 'auto', icsProxy: 'https://solitary-wave-8fd8.adamtudgey.workers.dev' },
   // default definitions for custom quick buttons (six slots)
   customButtons: [
     { label: 'Custom 1', color: '#fde047', startTime: '00:00', endTime: '23:59' },
@@ -617,7 +630,10 @@ function loadState(){
     const parsed=JSON.parse(raw);
     if(!parsed.lists) parsed.lists={groceries:[],todos:[]};
     if(!parsed.meals) parsed.meals={};
-    if(!parsed.settings) parsed.settings={theme:'auto'};
+    // When loading saved state from localStorage, ensure default icsProxy is set
+    // to the Cloudflare worker URL if settings are missing. This pre-fills the
+    // CORS proxy field for first-time users.
+    if(!parsed.settings) parsed.settings={theme:'auto', icsProxy:'https://solitary-wave-8fd8.adamtudgey.workers.dev'};
     if(!parsed.recipes) parsed.recipes=[];
     if(!parsed.recipeUsage) parsed.recipeUsage={};
     return parsed;
@@ -635,7 +651,10 @@ function migrate(parsed){
   const p = parsed || {};
   if(!p.lists) p.lists = { groceries: [], todos: [] };
   if(!p.meals) p.meals = {};
-  if(!p.settings) p.settings = { theme: 'auto' };
+  // ensure settings exist with theme and icsProxy
+  if(!p.settings) p.settings = { theme: 'auto', icsProxy: 'https://solitary-wave-8fd8.adamtudgey.workers.dev' };
+  // if settings exists but icsProxy missing, set default
+  if(p.settings.icsProxy == null) p.settings.icsProxy = 'https://solitary-wave-8fd8.adamtudgey.workers.dev';
   if(!p.recipes) p.recipes = [];
   if(!p.recipeUsage) p.recipeUsage = {};
   // Provide default members if missing or empty
@@ -1595,6 +1614,17 @@ function renderSettings(){
     customList.appendChild(addBtn);
   }
 
+  // CORS proxy input for iCal sync
+  const proxyInput = document.getElementById('icsProxyInput');
+  if(proxyInput){
+    // initialise value from state
+    proxyInput.value = state.settings.icsProxy || '';
+    proxyInput.onchange = () => {
+      state.settings.icsProxy = proxyInput.value.trim();
+      saveState();
+    };
+  }
+
   // Render calendar subscriptions UI (if the elements exist)
   renderSubscriptionsUI();
 }
@@ -1761,8 +1791,16 @@ function renderSubscriptionsUI(){
 async function syncSubscription(sub){
   try{
     let url = sub.url;
+    // normalise scheme
     url = url.replace(/^webcal:/i, 'https:');
     url = url.replace(/%3E$/,'');
+    // if proxy base set, wrap the URL
+    const proxyBase = (state.settings && state.settings.icsProxy) ? state.settings.icsProxy.trim() : '';
+    if(proxyBase){
+      const encoded = encodeURIComponent(url);
+      // ensure no trailing slash on base
+      url = proxyBase.replace(/\/$/, '') + '/?url=' + encoded;
+    }
     const resp = await fetch(url, { cache: 'no-store' });
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     const text = await resp.text();
