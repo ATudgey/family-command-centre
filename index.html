@@ -1820,7 +1820,19 @@ async function syncSubscription(sub){
         sourceId: sub.id
       });
     });
+    // Push imported events
     state.events.push(...imported);
+    // Deduplicate events for this subscription to avoid duplicates when syncing multiple times.
+    // Remove any duplicate events that have the same sourceId, title, start, end, and memberId.
+    state.events = state.events.filter((ev, idx, self) => {
+      return idx === self.findIndex(e =>
+        (e.sourceId === ev.sourceId) &&
+        (e.title === ev.title) &&
+        (e.start === ev.start) &&
+        (e.end === ev.end) &&
+        (e.memberId === ev.memberId)
+      );
+    });
     sub.lastSync = new Date().toISOString();
     saveState();
     renderSubscriptionsUI();
