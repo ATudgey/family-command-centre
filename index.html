@@ -339,6 +339,22 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
             <div id="customButtonsList" class="custom-buttons-list"></div>
             <small class="muted">Configure label, colour, and times for your quick action buttons. Use + Add Button to add more and Remove to delete. Changes save automatically.</small>
           </div>
+
+          <!-- Calendar Subscriptions and Imports -->
+          <div class="box">
+            <h3>Calendar Subscriptions</h3>
+            <div class="row wrap gap">
+              <input id="icsUrlInput" placeholder="Paste iCal (.ics) URL" style="flex:1 1 260px; min-width:200px;" />
+              <select id="icsMemberSelect" title="Assign to member"></select>
+              <button id="addIcsBtn" class="primary">+ Subscribe</button>
+            </div>
+            <div class="row wrap gap" style="margin-top:.5rem">
+              <label class="file-label">Import .ics <input id="importIcsInput" type="file" accept=".ics,text/calendar" /></label>
+              <select id="importIcsMemberSelect" title="Assign to member"></select>
+            </div>
+            <ul id="subsList" class="card-list"></ul>
+            <small class="muted">Tip: some calendar servers may block direct requests. You can download and import the .ics file manually using the Import button above.</small>
+          </div>
         </div>
       </section>
     </main>
@@ -465,6 +481,74 @@ function fromLocalInput(val){ return new Date(val).toISOString(); }
 function byId(arr,id){ return arr.find(x=>x.id===id); }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function hex2rgba(hex,a){ const c=hex.replace('#',''); const n=parseInt(c,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r}, ${g}, ${b}, ${a})`; }
+// ---- iCal parsing helpers ----
+// Normalize folded lines in RFC 5545. Caller should join folded lines.
+function normalizeIcsLine(line){
+  return line.replace(/\r?\n[ \t]/g, '');
+}
+// Minimal iCal (.ics) parser for VEVENTs. Supports DTSTART, DTEND, SUMMARY, LOCATION, DESCRIPTION, UID.
+function parseICS(text){
+  // Join folded lines by removing CRLF or LF followed by a space or tab
+  text = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+  const lines = text.split(/\r?\n/).map(normalizeIcsLine);
+  const events = [];
+  let cur = null;
+  for(const ln of lines){
+    if(ln === 'BEGIN:VEVENT'){ cur = {}; continue; }
+    if(ln === 'END:VEVENT'){ if(cur) events.push(cur); cur = null; continue; }
+    if(!cur) continue;
+    const [k, ...rest] = ln.split(':');
+    const v = rest.join(':');
+    if(k.startsWith('DTSTART')){
+      cur.start = icsDateToLocal(v);
+    } else if(k.startsWith('DTEND')){
+      cur.end = icsDateToLocal(v);
+    } else if(k === 'SUMMARY'){
+      cur.title = v;
+    } else if(k === 'LOCATION'){
+      cur.location = v;
+    } else if(k === 'DESCRIPTION'){
+      cur.notes = v;
+    } else if(k === 'UID'){
+      cur.uid = v;
+    }
+  }
+  // Provide default end times if missing (all-day events)
+  events.forEach(e=>{
+    if(!e.end){
+      const dt = new Date(e.start);
+      // For timed events (where start string includes time), add one hour
+      if(e.start && e.start.length > 15 && e.start.includes(':')){
+        const dtt = new Date(e.start); dtt.setHours(dtt.getHours() + 1);
+        e.end = dtt.toISOString();
+      } else {
+        dt.setHours(23, 59, 0, 0);
+        e.end = dt.toISOString();
+      }
+    }
+  });
+  return events;
+}
+// Convert iCal date/time strings (YYYYMMDD or YYYYMMDDThhmmssZ) to local ISO
+function icsDateToLocal(raw){
+  // Date-only format (YYYYMMDD)
+  if(/^\d{8}$/.test(raw)){
+    const y = +raw.slice(0,4), m = +raw.slice(4,6) - 1, d = +raw.slice(6,8);
+    const dt = new Date(); dt.setFullYear(y, m, d); dt.setHours(0,0,0,0);
+    return dt.toISOString();
+  }
+  // Date-time (with or without Z)
+  const hasZ = raw.endsWith('Z');
+  const y = +raw.slice(0,4), m = +raw.slice(4,6) - 1, d = +raw.slice(6,8);
+  const hh = +raw.slice(9,11) || 0, mm = +raw.slice(11,13) || 0, ss = +raw.slice(13,15) || 0;
+  if(hasZ){
+    const dt = new Date(Date.UTC(y, m, d, hh, mm, ss));
+    return dt.toISOString();
+  } else {
+    const dt = new Date(); dt.setFullYear(y, m, d); dt.setHours(hh, mm, ss, 0);
+    return dt.toISOString();
+  }
+}
 
 const STORAGE_KEY = 'fcc:v2'; // bump version to avoid conflicting with older saves
 const defaultData = () => ({
@@ -516,6 +600,9 @@ const defaultData = () => ({
       ingredients: ["eggs","cheddar","butter","salt","pepper"] }
   ],
   recipeUsage: {} // recipeId -> count
+  ,
+  // calendar subscriptions (external iCal feeds)
+  subscriptions: []
 });
 function uid(){ return Math.random().toString(36).slice(2,10); }
 // We'll initialize state asynchronously after loading from Firestore.
@@ -566,6 +653,17 @@ function migrate(parsed){
       const out = { ...btn };
       if(out.startTime == null) out.startTime = '00:00';
       if(out.endTime == null) out.endTime = '23:59';
+      return out;
+    });
+  }
+  // Ensure subscriptions array exists
+  if(!Array.isArray(p.subscriptions)) p.subscriptions = [];
+  else {
+    // ensure title and lastSync fields on subscriptions
+    p.subscriptions = p.subscriptions.map(sub => {
+      const out = { ...sub };
+      if(out.title == null) out.title = 'Calendar';
+      if(out.lastSync == null) out.lastSync = null;
       return out;
     });
   }
@@ -1496,6 +1594,9 @@ function renderSettings(){
     });
     customList.appendChild(addBtn);
   }
+
+  // Render calendar subscriptions UI (if the elements exist)
+  renderSubscriptionsUI();
 }
 function buildICS(events){
   const dtstamp=new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
@@ -1513,6 +1614,185 @@ function buildICS(events){
 }
 function icsEscape(s){ return s.replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
 function downloadBlob(blob, filename){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0); }
+
+// Render and manage calendar subscriptions and imports
+function renderSubscriptionsUI(){
+  const urlInput = document.getElementById('icsUrlInput');
+  const msel = document.getElementById('icsMemberSelect');
+  const importSel = document.getElementById('importIcsMemberSelect');
+  const subsList = document.getElementById('subsList');
+  const importInput = document.getElementById('importIcsInput');
+  // If the UI elements are not present (e.g. not on settings page), bail out
+  if(!msel || !importSel) return;
+  // Populate member selects
+  msel.innerHTML = state.members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  importSel.innerHTML = state.members.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  // Render subscription list
+  if(subsList){
+    subsList.innerHTML = '';
+    state.subscriptions.forEach(sub => {
+      const li = document.createElement('li');
+      li.className = 'card';
+      // Build member options with current selection
+      const memberOpts = state.members.map(m => `<option value="${m.id}" ${m.id===sub.memberId? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
+      li.innerHTML = `
+        <div class="row space-between align-center wrap">
+          <div class="row wrap gap">
+            <input type="text" class="subs-title-input" data-id="${sub.id}" value="${escapeHtml(sub.title || '')}" />
+            <select class="subs-member-select" data-id="${sub.id}">${memberOpts}</select>
+          </div>
+          <div class="row gap">
+            <button class="mini secondary" data-action="sync" data-id="${sub.id}">Sync now</button>
+            <button class="mini danger" data-action="remove" data-id="${sub.id}">Remove</button>
+          </div>
+        </div>
+        <div class="muted" style="max-width:640px; overflow:hidden; text-overflow:ellipsis">${escapeHtml(sub.url)}</div>
+        <div class="muted">Last sync: ${sub.lastSync ? new Date(sub.lastSync).toLocaleString() : '—'}</div>
+      `;
+      subsList.appendChild(li);
+    });
+    // Attach event listeners for title changes
+    subsList.querySelectorAll('.subs-title-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const subId = inp.getAttribute('data-id');
+        const sub = state.subscriptions.find(s => s.id === subId);
+        if(sub){ sub.title = inp.value; saveState(); }
+      });
+    });
+    // Attach event listeners for member selection changes
+    subsList.querySelectorAll('.subs-member-select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const subId = sel.getAttribute('data-id');
+        const sub = state.subscriptions.find(s => s.id === subId);
+        if(sub){
+          const newMemberId = sel.value;
+          // Update subscription assignment
+          sub.memberId = newMemberId;
+          // Update all events from this subscription to new member
+          state.events.forEach(ev => {
+            if(ev.sourceId === subId){ ev.memberId = newMemberId; }
+          });
+          saveState();
+          renderCalendar();
+          renderAgenda();
+          renderProfilePills?.();
+          renderQuickButtons?.();
+        }
+      });
+    });
+    // Attach event listeners to sync and remove buttons
+    subsList.querySelectorAll('button[data-action="sync"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const subId = btn.getAttribute('data-id');
+        const sub = state.subscriptions.find(s => s.id === subId);
+        if(sub) syncSubscription(sub);
+      });
+    });
+    subsList.querySelectorAll('button[data-action="remove"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const subId = btn.getAttribute('data-id');
+        if(!confirm('Remove this subscription?')) return;
+        state.subscriptions = state.subscriptions.filter(s => s.id !== subId);
+        // Remove events imported from this source
+        state.events = state.events.filter(e => e.sourceId !== subId);
+        saveState();
+        renderSubscriptionsUI();
+        renderCalendar();
+        renderAgenda();
+      });
+    });
+  }
+  // Add event listener for subscribe button
+  const addBtn = document.getElementById('addIcsBtn');
+  if(addBtn){
+    addBtn.onclick = async () => {
+      const url = (urlInput?.value || '').trim().replace(/%3E$/,'');
+      if(!url){ alert('Please enter a URL'); return; }
+      const memberId = msel.value || state.members[0]?.id;
+      const id = uid();
+      // Propose a default title based on member name
+      const memberName = (byId(state.members, memberId)?.name) || 'Calendar';
+      const defaultTitle = `${memberName} Calendar`;
+      let title = prompt('Name this subscription', defaultTitle);
+      if(title === null) title = defaultTitle;
+      title = title.trim() || defaultTitle;
+      const sub = { id, url, title: title, memberId, lastSync:null };
+      state.subscriptions.push(sub);
+      saveState();
+      renderSubscriptionsUI();
+      await syncSubscription(sub);
+    };
+  }
+  // Add event listener for importing .ics file
+  if(importInput){
+    importInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const memberId = importSel.value || state.members[0]?.id;
+      try{
+        const text = await file.text();
+        const icsEvents = parseICS(text);
+        icsEvents.forEach(ev => {
+          const newEvent = {
+            id: uid(),
+            title: ev.title || 'Event',
+            start: ev.start,
+            end: ev.end,
+            memberId: memberId,
+            location: ev.location || '',
+            notes: ev.notes || '',
+            sourceId: null
+          };
+          state.events.push(newEvent);
+        });
+        saveState();
+        renderCalendar();
+        renderAgenda();
+        alert(`Imported ${icsEvents.length} events from file.`);
+        importInput.value = '';
+      }catch(err){
+        alert('Failed to import .ics: ' + err.message);
+      }
+    };
+  }
+}
+
+// Fetch and import events from a subscription. Overwrites existing events from this source.
+async function syncSubscription(sub){
+  try{
+    let url = sub.url;
+    url = url.replace(/^webcal:/i, 'https:');
+    url = url.replace(/%3E$/,'');
+    const resp = await fetch(url, { cache: 'no-store' });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const text = await resp.text();
+    const icsEvents = parseICS(text);
+    // Remove existing events for this subscription
+    state.events = state.events.filter(e => e.sourceId !== sub.id);
+    const imported = [];
+    icsEvents.forEach(ev => {
+      imported.push({
+        id: uid(),
+        title: ev.title || 'Event',
+        start: ev.start,
+        end: ev.end,
+        memberId: sub.memberId,
+        location: ev.location || '',
+        notes: ev.notes || '',
+        sourceId: sub.id
+      });
+    });
+    state.events.push(...imported);
+    sub.lastSync = new Date().toISOString();
+    saveState();
+    renderSubscriptionsUI();
+    renderCalendar();
+    renderAgenda();
+    alert(`Imported ${imported.length} events from subscription.`);
+  }catch(err){
+    alert('Failed to fetch calendar: ' + err.message);
+  }
+}
 
 async function boot(){
   // Load state (from Firestore if available) before rendering
