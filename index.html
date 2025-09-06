@@ -186,6 +186,69 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
   font-size:.85rem;
 }
 .custom-buttons-list input[type="text"]{ flex:1; }
+
+/* ----- PIN lock overlay styles ----- */
+/* A full-screen overlay that prompts for a 4-digit PIN before the app becomes usable. */
+#pinOverlay{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100vw;
+  height:100vh;
+  /* Add a decorative background image with a fallback colour. The image lives in the project as pin_bg.png. */
+  background: var(--bg) url('pin_bg.png') center/cover no-repeat;
+  z-index:100000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#pinOverlay.hidden{ display:none; }
+.pin-pad{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  /* Each row is a fixed height to ensure buttons stay uniform. */
+  grid-auto-rows:60px;
+  gap:.75rem;
+  padding:1rem;
+  background:var(--card);
+  border:1px solid var(--grid);
+  border-radius:1rem;
+  box-shadow:var(--shadow);
+  width:240px;
+}
+.pin-display{
+  grid-column:span 3;
+  background:var(--bg);
+  border:1px solid var(--grid);
+  border-radius:.5rem;
+  padding:.5rem;
+  font-size:1.5rem;
+  letter-spacing:.3rem;
+  text-align:center;
+  /* Align display height with button height for visual symmetry */
+  min-height:60px;
+}
+.pin-button{
+  background:var(--card);
+  border:1px solid var(--grid);
+  border-radius:.5rem;
+  /* Remove variable padding and set a fixed height so all buttons match, regardless of label length */
+  width:100%;
+  height:60px;
+  padding:0;
+  font-size:1.25rem;
+  cursor:pointer;
+  touch-action:manipulation;
+  user-select:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  /* Prevent label text from wrapping or affecting the button size */
+  white-space:nowrap;
+}
+.pin-button:active{
+  background:var(--grid);
+}
 </style>
 </head>
 <body>
@@ -195,6 +258,25 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
   </header>
 
   <canvas id="confettiCanvas"></canvas>
+
+  <!-- PIN lock overlay. This layer covers the entire app and requires a 4‑digit PIN before use. -->
+  <div id="pinOverlay" class="hidden" aria-hidden="true">
+    <div class="pin-pad" role="group" aria-label="PIN entry pad">
+      <div id="pinDisplay" class="pin-display" aria-label="PIN input display"></div>
+      <button type="button" class="pin-button" data-digit="1">1</button>
+      <button type="button" class="pin-button" data-digit="2">2</button>
+      <button type="button" class="pin-button" data-digit="3">3</button>
+      <button type="button" class="pin-button" data-digit="4">4</button>
+      <button type="button" class="pin-button" data-digit="5">5</button>
+      <button type="button" class="pin-button" data-digit="6">6</button>
+      <button type="button" class="pin-button" data-digit="7">7</button>
+      <button type="button" class="pin-button" data-digit="8">8</button>
+      <button type="button" class="pin-button" data-digit="9">9</button>
+      <button type="button" class="pin-button" data-action="clear">Clear</button>
+      <button type="button" class="pin-button" data-digit="0">0</button>
+      <button type="button" class="pin-button" data-action="back">←</button>
+    </div>
+  </div>
 
   <div class="app">
     <aside class="nav" role="navigation" aria-label="Primary">
@@ -786,6 +868,108 @@ let calCursor = atMidnight(new Date());
 let agendaSelectedKey = dateKeyLocal(new Date());
 // New variable to track active profile (selected member)
 let selectedProfileId = 'all';
+
+// === PIN lock implementation ===
+// A simple 4‑digit PIN system to restrict access to the Family Command Center.
+// Users must enter the correct PIN (defined below) via on‑screen buttons or the keyboard.
+const PIN_CODE = '0156';
+// Accumulates user-entered digits
+let enteredPin = '';
+
+// Update the PIN display element with bullets corresponding to entered digits
+function updatePinDisplay() {
+  const disp = document.getElementById('pinDisplay');
+  if(!disp) return;
+  disp.textContent = '•'.repeat(enteredPin.length);
+}
+
+// Reset the stored PIN and refresh the display
+function resetPin() {
+  enteredPin = '';
+  updatePinDisplay();
+}
+
+// Show the overlay and reset any previous input
+function showPinOverlay() {
+  const ov = document.getElementById('pinOverlay');
+  if(ov) ov.classList.remove('hidden');
+  resetPin();
+}
+
+// Hide the overlay and reset any previous input
+function hidePinOverlay() {
+  const ov = document.getElementById('pinOverlay');
+  if(ov) ov.classList.add('hidden');
+  resetPin();
+}
+
+// Handle entry of a digit; validates when enough digits have been entered
+function handlePinDigit(d) {
+  if(enteredPin.length >= PIN_CODE.length) return;
+  enteredPin += d;
+  updatePinDisplay();
+  if(enteredPin.length === PIN_CODE.length) {
+    if(enteredPin === PIN_CODE) {
+      try{ localStorage.setItem('fcc:pinUnlocked','true'); }catch(e){}
+      hidePinOverlay();
+      // Boot the app now that the PIN has been accepted
+      boot();
+    } else {
+      // Wrong code: flash red and reset
+      const disp = document.getElementById('pinDisplay');
+      if(disp) {
+        disp.style.color = 'var(--danger)';
+        setTimeout(() => { disp.style.color = ''; }, 300);
+      }
+      resetPin();
+    }
+  }
+}
+
+// Handle clear and back actions from the keypad
+function handlePinAction(action) {
+  if(action === 'clear') {
+    resetPin();
+  } else if(action === 'back') {
+    enteredPin = enteredPin.slice(0, -1);
+    updatePinDisplay();
+  }
+}
+
+// Set up listeners for the PIN overlay and manage its initial display
+function initPinLock() {
+  const overlay = document.getElementById('pinOverlay');
+  // Attach individual click handlers to each pin button. Using direct listeners avoids issues with event delegation.
+  document.querySelectorAll('#pinOverlay .pin-button').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      // Prevent clicks from bubbling under the overlay
+      ev.preventDefault();
+      ev.stopPropagation();
+      const d = btn.getAttribute('data-digit');
+      const act = btn.getAttribute('data-action');
+      if(d !== null && d !== undefined) {
+        handlePinDigit(d);
+      } else if(act) {
+        handlePinAction(act);
+      }
+    });
+  });
+  // Keyboard support
+  window.addEventListener('keydown', (ev) => {
+    const overlay = document.getElementById('pinOverlay');
+    if(!overlay || overlay.classList.contains('hidden')) return;
+    // Accept number keys
+    if(/^[0-9]$/.test(ev.key)) {
+      handlePinDigit(ev.key);
+    } else if(ev.key === 'Backspace') {
+      handlePinAction('back');
+    } else if(ev.key === 'Delete') {
+      handlePinAction('clear');
+    }
+  });
+  // Always show the overlay on initial load. Sessions are not persisted, so a PIN is required every time.
+  showPinOverlay();
+}
 
 $('#prevMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); renderCalendar(); });
 $('#nextMonth').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); renderCalendar(); });
@@ -1845,6 +2029,14 @@ async function syncSubscription(sub){
 }
 
 async function boot(){
+  // If the PIN has not been entered yet, show the overlay and exit early.
+  try {
+    if(localStorage.getItem('fcc:pinUnlocked') !== 'true'){
+      const ov=document.getElementById('pinOverlay');
+      if(ov) ov.classList.remove('hidden');
+      return;
+    }
+  } catch(e){}
   // Load state (from Firestore if available) before rendering
   await loadState();
   ensureTheme();
@@ -1852,7 +2044,12 @@ async function boot(){
   renderCalendar(); renderChores(); renderLists(); renderMeals(); renderSettings(); renderProfilePills(); renderQuickButtons();
   setActive('meals'); // jump straight to meals for convenience
 }
-document.addEventListener('DOMContentLoaded', boot);
+// Initialise the PIN lock and then boot the application.  The overlay will prevent further
+// execution until the correct PIN is provided.
+document.addEventListener('DOMContentLoaded', () => {
+  initPinLock();
+  boot();
+});
 </script>
 </body>
 </html>
