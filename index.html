@@ -195,14 +195,27 @@ button.danger{ background:var(--danger); color:#fff; border-color:transparent; }
   left:0;
   width:100vw;
   height:100vh;
-  /* Add a decorative background image with a fallback colour. The image lives in the project as pin_bg.png. */
-  background: var(--bg) url('pin_bg.png') center/cover no-repeat;
+  /* Animated gradient background using the app's accent colours.  The gradient slowly shifts position to create a dynamic effect. */
+  background: linear-gradient(-45deg,
+    var(--color-calendar),
+    var(--color-chores),
+    var(--color-lists),
+    var(--color-meals)
+  );
+  background-size: 600% 600%;
+  animation: pinGradient 25s ease infinite;
   z-index:100000;
   display:flex;
   align-items:center;
   justify-content:center;
 }
 #pinOverlay.hidden{ display:none; }
+/* Keyframes for the animated PIN pad background. Moves the gradient horizontally for a smooth cycle. */
+@keyframes pinGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 .pin-pad{
   display:grid;
   grid-template-columns:repeat(3,1fr);
